@@ -133,7 +133,7 @@ Guidelines:
 
     // First API call
     let response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250929",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: systemPrompt,
       tools: tools,
@@ -170,7 +170,7 @@ Guidelines:
       });
 
       response = await anthropic.messages.create({
-        model: "claude-sonnet-4-5-20250929",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         system: systemPrompt,
         tools: tools,
