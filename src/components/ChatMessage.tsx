@@ -1,5 +1,7 @@
 "use client";
 
+import ReactMarkdown from "react-markdown";
+
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
@@ -25,8 +27,25 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
             Plex Assistant
           </div>
         )}
-        <div className="whitespace-pre-wrap text-sm md:text-base leading-relaxed">
-          {content}
+        <div className="prose prose-sm md:prose-base prose-invert max-w-none">
+          {isUser ? (
+            <p className="m-0">{content}</p>
+          ) : (
+            <ReactMarkdown
+              components={{
+                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal">{children}</ol>,
+                li: ({ children }) => <li className="mb-1">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold text-plex-orange">{children}</strong>,
+                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-plex-orange">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-base font-bold mb-2 text-plex-orange">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-sm font-bold mb-1 text-plex-orange">{children}</h3>,
+              }}
+            >
+              {content}
+            </ReactMarkdown>
+          )}
         </div>
       </div>
     </div>
