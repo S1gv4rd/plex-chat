@@ -8,23 +8,27 @@ interface LibraryStatsProps {
   error: string | null;
 }
 
+function formatNumber(num: number): string {
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  }
+  return num.toString();
+}
+
 export default function LibraryStats({ summary, loading, error }: LibraryStatsProps) {
   if (loading) {
     return (
-      <div className="bg-plex-dark rounded-xl p-4 mb-4">
-        <div className="animate-pulse flex gap-4">
-          <div className="h-12 w-24 bg-plex-gray rounded" />
-          <div className="h-12 w-24 bg-plex-gray rounded" />
-          <div className="h-12 w-24 bg-plex-gray rounded" />
-        </div>
+      <div className="hidden sm:flex items-center gap-4">
+        <div className="animate-pulse h-4 w-16 bg-plex-gray/50 rounded" />
+        <div className="animate-pulse h-4 w-16 bg-plex-gray/50 rounded" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-4 mb-4">
-        <p className="text-red-400 text-sm">{error}</p>
+      <div className="hidden sm:block">
+        <span className="text-xs text-red-400/80 bg-red-900/20 px-2 py-1 rounded-md">Offline</span>
       </div>
     );
   }
@@ -32,33 +36,15 @@ export default function LibraryStats({ summary, loading, error }: LibraryStatsPr
   if (!summary) return null;
 
   return (
-    <div className="bg-plex-dark rounded-xl p-4 mb-4">
-      <div className="flex flex-wrap gap-4 justify-center md:justify-start">
-        <div className="text-center">
-          <div className="text-2xl md:text-3xl font-bold text-plex-orange">
-            {summary.totalMovies}
-          </div>
-          <div className="text-xs text-foreground/60">Movies</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl md:text-3xl font-bold text-plex-orange">
-            {summary.totalShows}
-          </div>
-          <div className="text-xs text-foreground/60">TV Shows</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl md:text-3xl font-bold text-plex-orange">
-            {summary.totalEpisodes}
-          </div>
-          <div className="text-xs text-foreground/60">Episodes</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl md:text-3xl font-bold text-plex-orange">
-            {summary.libraries.length}
-          </div>
-          <div className="text-xs text-foreground/60">Libraries</div>
-        </div>
-      </div>
+    <div className="hidden sm:flex items-center gap-1 text-xs text-foreground/50">
+      <span className="font-medium text-plex-orange">{formatNumber(summary.totalMovies)}</span>
+      <span>movies</span>
+      <span className="text-foreground/20 mx-1">•</span>
+      <span className="font-medium text-plex-orange">{formatNumber(summary.totalShows)}</span>
+      <span>shows</span>
+      <span className="text-foreground/20 mx-1">•</span>
+      <span className="font-medium text-plex-orange">{formatNumber(summary.totalEpisodes)}</span>
+      <span>episodes</span>
     </div>
   );
 }
