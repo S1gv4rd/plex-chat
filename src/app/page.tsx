@@ -12,13 +12,6 @@ interface Message {
   content: string;
 }
 
-// Haptic feedback utility
-function haptic(style: "light" | "medium" | "heavy" = "light") {
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-    const duration = style === "light" ? 10 : style === "medium" ? 20 : 30;
-    navigator.vibrate(duration);
-  }
-}
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -43,8 +36,6 @@ export default function Home() {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
-
-    haptic("medium");
 
     const userMessage: Message = { role: "user", content: content.trim() };
     setMessages(prev => [...prev, userMessage]);
@@ -94,13 +85,11 @@ export default function Home() {
       }
 
       setMessages(prev => [...prev, { role: "assistant", content: fullContent }]);
-      haptic("light");
     } catch {
       setMessages(prev => [...prev, {
         role: "assistant",
         content: "Sorry, I had trouble processing that. Please try again.",
       }]);
-      haptic("heavy");
     } finally {
       setStreamingContent("");
       setIsLoading(false);
@@ -120,7 +109,6 @@ export default function Home() {
   }, [input, sendMessage]);
 
   const resetChat = useCallback(() => {
-    haptic("light");
     setMessages([]);
   }, []);
 
