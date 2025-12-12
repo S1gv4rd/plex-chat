@@ -7,48 +7,105 @@ interface SuggestedQuestionsProps {
 }
 
 const allSuggestions = [
-  // What to watch
+  // What to watch tonight
   "What should I watch tonight?",
   "Recommend a movie for date night",
   "Something fun for the whole family?",
   "I want something short, under 90 minutes",
   "What's a good weekend binge?",
+  "Pick a random movie for me",
+  "What's something I haven't watched in a while?",
+  "Surprise me with something good",
 
-  // Discovery
-  "What movies haven't I watched yet?",
-  "Show me my highest rated unwatched films",
-  "What new shows did I add recently?",
-  "Any hidden gems in my collection?",
-  "What's my longest unwatched movie?",
+  // Moods
+  "I need a laugh, something funny",
+  "I want to cry, something emotional",
+  "Something intense and suspenseful",
+  "A feel-good movie to cheer me up",
+  "Something dark and gritty",
+  "A relaxing, easy watch",
+  "Something mind-bending",
+  "An epic adventure film",
 
-  // Genres & Moods
+  // Genres
   "What sci-fi movies do I have?",
-  "I'm in the mood for comedy",
   "Show me some thrillers",
   "What horror movies are in my library?",
   "Any good documentaries?",
-  "I want something feel-good",
+  "Show me action movies",
+  "What dramas do I have?",
+  "Any romantic comedies?",
+  "What animated films do I own?",
+  "Show me crime movies",
+  "Any war films in my collection?",
+  "What westerns do I have?",
+  "Show me mystery movies",
+  "Any musicals?",
+  "What fantasy films do I have?",
 
-  // People
+  // Actors
   "What Tom Hanks movies do I have?",
-  "Films directed by Christopher Nolan?",
   "Any movies with Meryl Streep?",
+  "Show me Leonardo DiCaprio films",
+  "What do I have with Denzel Washington?",
+  "Movies starring Brad Pitt?",
+  "Any Scarlett Johansson films?",
+  "What Nicolas Cage movies do I own?",
+  "Show me films with Morgan Freeman",
+  "Any movies with Cate Blanchett?",
+  "What do I have with Samuel L. Jackson?",
+  "Films starring Joaquin Phoenix?",
+  "Any Amy Adams movies?",
+  "Show me Keanu Reeves films",
+  "What Jake Gyllenhaal movies do I have?",
+
+  // Directors
+  "Films directed by Christopher Nolan?",
   "Show me Spielberg films in my library",
   "What Tarantino movies do I own?",
+  "Any Scorsese films?",
+  "Show me Denis Villeneuve movies",
+  "What do I have from David Fincher?",
+  "Any Wes Anderson films?",
+  "Movies directed by Ridley Scott?",
+  "Show me Coen Brothers films",
+  "What Stanley Kubrick movies do I have?",
+  "Any films by Guillermo del Toro?",
+  "Show me Edgar Wright movies",
+  "What do I have from Paul Thomas Anderson?",
 
-  // Collection analysis
-  "What's missing from my collection?",
-  "What am I currently watching?",
-  "What decade has the most movies?",
-  "What genres do I have the most of?",
-  "Any movie series I haven't finished?",
+  // Discovery
+  "What movies haven't I watched yet?",
+  "Any hidden gems in my collection?",
+  "What's my longest unwatched movie?",
+  "Show me critically acclaimed films I haven't seen",
+  "What cult classics do I have?",
+  "Any underrated movies?",
 
   // Specific requests
-  "Best movies from the 80s in my library?",
-  "Award-winning films I haven't seen?",
+  "Best movies from the 80s?",
+  "Classic films from the 90s?",
   "What's the oldest movie I have?",
   "Movies over 3 hours long?",
   "Foreign films in my collection?",
+  "Any black and white movies?",
+  "Show me movies from this year",
+  "What sequels do I have?",
+  "Any based on true stories?",
+  "Show me book adaptations",
+
+  // TV Shows
+  "What TV shows should I start?",
+  "Any short series I can finish quickly?",
+  "What's a good drama series?",
+  "Show me comedy TV shows",
+  "Any limited series?",
+  "What reality shows do I have?",
+
+  // Currently watching
+  "What am I currently watching?",
+  "What should I continue watching?",
+  "Any shows I haven't finished?",
 ];
 
 function shuffleArray<T>(array: T[]): T[] {
