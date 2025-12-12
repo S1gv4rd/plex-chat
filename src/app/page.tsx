@@ -97,14 +97,17 @@ export default function Home() {
       {/* Header */}
       <header className="px-4 py-3 safe-top shrink-0">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setMessages([])}
+            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+          >
             <div className="w-8 h-8 bg-plex-orange rounded-lg flex items-center justify-center">
               <svg className="w-4 h-4 text-black" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
               </svg>
             </div>
             <span className="text-base font-medium text-foreground">Plex Chat</span>
-          </div>
+          </button>
           <LibraryStats
             summary={librarySummary}
             loading={libraryLoading}
