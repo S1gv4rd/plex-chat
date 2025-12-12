@@ -95,18 +95,15 @@ export default function Home() {
   return (
     <div className="h-[100dvh] flex flex-col bg-background">
       {/* Header */}
-      <header className="border-b border-plex-gray/50 px-4 py-4 safe-top shrink-0">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-plex-orange to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-plex-orange/20">
-              <svg className="w-5 h-5 text-black" viewBox="0 0 24 24" fill="currentColor">
+      <header className="px-4 py-3 safe-top shrink-0">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-plex-orange rounded-lg flex items-center justify-center">
+              <svg className="w-4 h-4 text-black" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
               </svg>
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-foreground">Plex Chat</h1>
-              <p className="text-xs text-foreground/50">AI-powered library assistant</p>
-            </div>
+            <span className="text-base font-medium text-foreground">Plex Chat</span>
           </div>
           <LibraryStats
             summary={librarySummary}
@@ -117,19 +114,19 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col max-w-3xl mx-auto w-full overflow-hidden">
+      <main className="flex-1 flex flex-col max-w-2xl mx-auto w-full overflow-hidden">
         {/* Chat messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="flex-1 overflow-y-auto px-4 py-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-plex-orange/20 to-amber-600/10 rounded-2xl flex items-center justify-center mb-6 shadow-inner">
-                <svg className="w-10 h-10 text-plex-orange" viewBox="0 0 24 24" fill="currentColor">
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <div className="w-16 h-16 bg-plex-orange/10 rounded-2xl flex items-center justify-center mb-5">
+                <svg className="w-8 h-8 text-plex-orange" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
                 </svg>
               </div>
-              <h2 className="text-2xl font-semibold mb-3 text-foreground">What would you like to watch?</h2>
-              <p className="text-foreground/50 mb-8 max-w-sm text-sm leading-relaxed">
-                I know your entire library. Ask me for recommendations, search by actor or director, or discover hidden gems.
+              <h2 className="text-xl font-medium mb-2 text-foreground">What would you like to watch?</h2>
+              <p className="text-foreground/40 mb-6 max-w-xs text-sm">
+                Ask for recommendations, search by actor, or explore your library.
               </p>
               <SuggestedQuestions onSelect={sendMessage} />
             </div>
@@ -145,27 +142,29 @@ export default function Home() {
         </div>
 
         {/* Input area */}
-        <div className="border-t border-plex-gray/50 p-4 safe-bottom shrink-0">
-          <form onSubmit={handleSubmit} className="flex gap-3 max-w-3xl mx-auto">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your Plex library..."
-              className="flex-1 bg-plex-gray/50 border border-plex-gray rounded-xl px-4 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-plex-orange/50 focus:border-plex-orange text-foreground placeholder-foreground/30 transition-all"
-              rows={1}
-              disabled={isLoading || !!libraryError}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading || !!libraryError}
-              className="bg-plex-orange text-black w-12 h-12 rounded-xl font-medium hover:bg-amber-500 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center shadow-lg shadow-plex-orange/20 disabled:shadow-none"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-              </svg>
-            </button>
+        <div className="p-4 safe-bottom shrink-0">
+          <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
+            <div className="flex-1 relative">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Message..."
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 pr-12 resize-none focus:outline-none focus:border-plex-orange/50 text-foreground placeholder-foreground/30 transition-colors"
+                rows={1}
+                disabled={isLoading || !!libraryError}
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading || !!libraryError}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-plex-orange text-black w-8 h-8 rounded-xl font-medium hover:bg-amber-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                </svg>
+              </button>
+            </div>
           </form>
         </div>
       </main>

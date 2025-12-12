@@ -75,13 +75,13 @@ export default function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-lg">
+    <div className="flex flex-col items-center gap-3 w-full max-w-md">
       <div className="flex flex-wrap gap-2 justify-center">
         {suggestions.map((question) => (
           <button
             key={question}
             onClick={() => onSelect(question)}
-            className="bg-plex-gray/50 border border-plex-gray/50 hover:border-plex-orange/50 hover:bg-plex-orange/10 text-sm px-4 py-2 rounded-full transition-all text-foreground/80 hover:text-plex-orange"
+            className="bg-white/5 border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-xs px-3 py-1.5 rounded-full transition-all text-foreground/60 hover:text-foreground"
           >
             {question}
           </button>
@@ -89,12 +89,12 @@ export default function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps
       </div>
       <button
         onClick={refresh}
-        className="text-xs text-foreground/40 hover:text-plex-orange transition-colors flex items-center gap-1.5 group"
+        className="text-[11px] text-foreground/30 hover:text-foreground/60 transition-colors flex items-center gap-1 group"
       >
-        <svg className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3 h-3 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        More ideas
+        More
       </button>
     </div>
   );

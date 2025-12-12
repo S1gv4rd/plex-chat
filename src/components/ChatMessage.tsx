@@ -11,36 +11,28 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
   const isUser = role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4`}>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
       <div
-        className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-3 ${
+        className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 ${
           isUser
-            ? "bg-plex-orange text-black"
-            : "bg-chat-assistant text-foreground"
+            ? "bg-plex-orange text-black rounded-br-md"
+            : "bg-white/5 text-foreground rounded-bl-md"
         }`}
       >
-        {!isUser && (
-          <div className="flex items-center gap-2 mb-2 text-plex-orange text-sm font-medium">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-            </svg>
-            Plex Assistant
-          </div>
-        )}
-        <div className="prose prose-sm md:prose-base prose-invert max-w-none">
+        <div className={`text-sm leading-relaxed ${isUser ? "" : "text-foreground/90"}`}>
           {isUser ? (
             <p className="m-0">{content}</p>
           ) : (
             <ReactMarkdown
               components={{
                 p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc">{children}</ul>,
+                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc marker:text-plex-orange/50">{children}</ul>,
                 ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal">{children}</ol>,
                 li: ({ children }) => <li className="mb-1">{children}</li>,
-                strong: ({ children }) => <strong className="font-semibold text-plex-orange">{children}</strong>,
-                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-plex-orange">{children}</h1>,
-                h2: ({ children }) => <h2 className="text-base font-bold mb-2 text-plex-orange">{children}</h2>,
-                h3: ({ children }) => <h3 className="text-sm font-bold mb-1 text-plex-orange">{children}</h3>,
+                strong: ({ children }) => <strong className="font-medium text-plex-orange">{children}</strong>,
+                h1: ({ children }) => <h1 className="text-base font-semibold mb-2 text-foreground">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-sm font-semibold mb-2 text-foreground">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-sm font-medium mb-1 text-foreground">{children}</h3>,
               }}
             >
               {content}

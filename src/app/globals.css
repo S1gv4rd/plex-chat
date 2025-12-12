@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #1a1a2e;
-  --foreground: #eaeaea;
+  --background: #0d0d0d;
+  --foreground: #f5f5f5;
   --plex-orange: #e5a00d;
-  --plex-gray: #282828;
-  --plex-dark: #121212;
-  --chat-user: #2d2d44;
-  --chat-assistant: #1f1f35;
+  --plex-gray: #1a1a1a;
+  --plex-dark: #0a0a0a;
+  --chat-user: #e5a00d;
+  --chat-assistant: #161616;
 }
 
 @theme inline {
@@ -27,7 +27,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for mobile */
+  min-height: 100dvh;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -48,34 +48,41 @@ input, textarea, select {
   padding-top: env(safe-area-inset-top, 0);
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - minimal */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--plex-dark);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--plex-gray);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3a3a3a;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Typing indicator animation */
-@keyframes bounce {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-4px); }
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 .typing-dot {
-  animation: bounce 1.4s infinite ease-in-out;
+  animation: pulse 1.5s infinite ease-in-out;
 }
 
 .typing-dot:nth-child(1) { animation-delay: 0s; }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
