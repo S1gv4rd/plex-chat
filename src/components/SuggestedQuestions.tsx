@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo, useCallback } from "react";
+import { useState, useEffect, memo, useCallback } from "react";
 
 interface SuggestedQuestionsProps {
   onSelect: (question: string) => void;
@@ -43,14 +43,14 @@ function shuffle<T>(array: T[]): T[] {
   return arr;
 }
 
-// Get initial items once (not on every render)
-function getInitialItems(): string[] {
-  const shuffled = shuffle(defaultSuggestions);
-  return shuffled.slice(0, 6);
-}
-
 const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
-  const [items, setItems] = useState<string[]>(getInitialItems);
+  // Start with first 6 items (deterministic for SSR), then shuffle on client
+  const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 6));
+
+  // Shuffle only on client after mount to avoid hydration mismatch
+  useEffect(() => {
+    setItems(shuffle(defaultSuggestions).slice(0, 6));
+  }, []);
 
   const refresh = useCallback(() => {
     setItems(shuffle(defaultSuggestions).slice(0, 6));
