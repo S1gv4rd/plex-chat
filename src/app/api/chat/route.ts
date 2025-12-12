@@ -131,10 +131,9 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
       ? `Here are ${movies.length} unwatched ${genre} movies from your library:\n`
       : `Here are ${movies.length} unwatched movies from your library:\n`;
     for (const movie of movies) {
-      const rating = movie.rating ? ` - Rating: ${movie.rating}/10` : "";
       const genres = movie.genres?.slice(0, 3).join(", ") || "";
       const summary = movie.summary ? ` - ${movie.summary.slice(0, 100)}...` : "";
-      response += `- **${movie.title}** (${movie.year || "?"})${rating}${genres ? ` [${genres}]` : ""}${summary}\n`;
+      response += `- **${movie.title}** (${movie.year || "?"})${genres ? ` [${genres}]` : ""}${summary}\n`;
     }
     return response;
   } else if (toolName === "search_by_genre") {
@@ -147,9 +146,8 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     const shuffled = results.sort(() => Math.random() - 0.5).slice(0, 15);
     let response = `Found ${results.length} ${type}s in ${toolInput.genre}. Here are some:\n`;
     for (const item of shuffled) {
-      const rating = item.rating ? ` - Rating: ${item.rating}/10` : "";
       const watched = item.viewCount ? " [WATCHED]" : "";
-      response += `- ${item.title} (${item.year || "?"})${rating}${watched}\n`;
+      response += `- ${item.title} (${item.year || "?"})${watched}\n`;
     }
     return response;
   }
