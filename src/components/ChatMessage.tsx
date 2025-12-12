@@ -1,13 +1,15 @@
 "use client";
 
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
+  isStreaming?: boolean;
 }
 
-export default function ChatMessage({ role, content }: ChatMessageProps) {
+const ChatMessage = memo(function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
   const isUser = role === "user";
 
   return (
@@ -38,8 +40,13 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
               {content}
             </ReactMarkdown>
           )}
+          {isStreaming && (
+            <span className="inline-block w-1.5 h-4 bg-plex-orange/60 ml-0.5 animate-pulse" />
+          )}
         </div>
       </div>
     </div>
   );
-}
+});
+
+export default ChatMessage;

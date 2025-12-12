@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import LibraryStats from "@/components/LibraryStats";
@@ -12,48 +12,45 @@ interface Message {
   content: string;
 }
 
+// Haptic feedback utility
+function haptic(style: "light" | "medium" | "heavy" = "light") {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    const duration = style === "light" ? 10 : style === "medium" ? 20 : 30;
+    navigator.vibrate(duration);
+  }
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
   const [librarySummary, setLibrarySummary] = useState<PlexLibrarySummary | null>(null);
-  const [libraryLoading, setLibraryLoading] = useState(true);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch library summary on mount
   useEffect(() => {
-    async function fetchLibrary() {
-      try {
-        const response = await fetch("/api/library");
-        if (!response.ok) {
-          throw new Error("Failed to connect to Plex");
-        }
-        const data = await response.json();
-        setLibrarySummary(data);
-        setLibraryError(null);
-      } catch (error) {
-        setLibraryError("Could not connect to Plex server. Check your configuration.");
-      } finally {
-        setLibraryLoading(false);
-      }
-    }
-    fetchLibrary();
+    // Fetch library summary in background - don't block UI
+    fetch("/api/library")
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(setLibrarySummary)
+      .catch(() => setLibraryError("Could not connect to Plex server."));
   }, []);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, streamingContent]);
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
+    haptic("medium");
+
     const userMessage: Message = { role: "user", content: content.trim() };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    setStreamingContent("");
 
     try {
       const response = await fetch("/api/chat", {
@@ -62,45 +59,76 @@ export default function Home() {
         body: JSON.stringify({ messages: [...messages, userMessage] }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to get response");
+      if (!response.ok) throw new Error();
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error();
+
+      const decoder = new TextDecoder();
+      let fullContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.text) {
+                fullContent += parsed.text;
+                setStreamingContent(fullContent);
+              }
+              if (parsed.error) throw new Error(parsed.error);
+            } catch (e) {
+              // Only log actual errors, not empty parse attempts
+              if (data.trim() && data !== "[DONE]") {
+                console.error("Parse error:", e, "Data:", data);
+              }
+            }
+          }
+        }
       }
 
-      const data = await response.json();
-      const assistantMessage: Message = { role: "assistant", content: data.message };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage: Message = {
+      setMessages(prev => [...prev, { role: "assistant", content: fullContent }]);
+      haptic("light");
+    } catch {
+      setMessages(prev => [...prev, {
         role: "assistant",
-        content: "Sorry, I had trouble processing that. Please check your connection and try again.",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+        content: "Sorry, I had trouble processing that. Please try again.",
+      }]);
+      haptic("heavy");
     } finally {
+      setStreamingContent("");
       setIsLoading(false);
     }
-  };
+  }, [messages, isLoading]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     sendMessage(input);
-  };
+  }, [input, sendMessage]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage(input);
     }
-  };
+  }, [input, sendMessage]);
+
+  const resetChat = useCallback(() => {
+    haptic("light");
+    setMessages([]);
+  }, []);
 
   return (
     <div className="h-[100dvh] flex flex-col bg-background">
-      {/* Header */}
       <header className="px-4 py-3 safe-top shrink-0">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <button
-            onClick={() => setMessages([])}
-            className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
-          >
+          <button onClick={resetChat} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 bg-plex-orange rounded-lg flex items-center justify-center">
               <svg className="w-4 h-4 text-black" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
@@ -108,19 +136,13 @@ export default function Home() {
             </div>
             <span className="text-base font-medium text-foreground">Plex Chat</span>
           </button>
-          <LibraryStats
-            summary={librarySummary}
-            loading={libraryLoading}
-            error={libraryError}
-          />
+          <LibraryStats summary={librarySummary} error={libraryError} />
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 flex flex-col max-w-2xl mx-auto w-full overflow-hidden">
-        {/* Chat messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {messages.length === 0 ? (
+          {messages.length === 0 && !streamingContent ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <div className="w-16 h-16 bg-plex-orange/10 rounded-2xl flex items-center justify-center mb-5">
                 <svg className="w-8 h-8 text-plex-orange" viewBox="0 0 24 24" fill="currentColor">
@@ -135,23 +157,22 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {messages.map((message, index) => (
-                <ChatMessage key={index} role={message.role} content={message.content} />
+              {messages.map((msg, i) => (
+                <ChatMessage key={i} role={msg.role} content={msg.content} />
               ))}
-              {isLoading && <TypingIndicator />}
+              {streamingContent && <ChatMessage role="assistant" content={streamingContent} isStreaming />}
+              {isLoading && !streamingContent && <TypingIndicator />}
               <div ref={messagesEndRef} />
             </>
           )}
         </div>
 
-        {/* Input area */}
         <div className="p-4 safe-bottom shrink-0">
           <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
             <div className="flex-1 relative">
               <textarea
-                ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Message..."
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 pr-12 resize-none focus:outline-none focus:border-plex-orange/50 text-foreground placeholder-foreground/30 transition-colors"

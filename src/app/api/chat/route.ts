@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLibraryContext, searchByPerson, searchLibrary, getRandomMovies, getUnwatchedMovies, searchByGenre } from "@/lib/plex";
+import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
 const anthropic = new Anthropic({
@@ -76,51 +76,122 @@ const tools: Anthropic.Tool[] = [
       },
       required: ["genre"]
     }
+  },
+  {
+    name: "get_watch_history",
+    description: "Get the user's watch history - movies and shows they've recently watched. Use this when the user asks 'what did I watch', 'my watch history', 'what have I seen recently', etc.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        limit: {
+          type: "number",
+          description: "Number of items to return (default 20)"
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "get_watch_stats",
+    description: "Get viewing statistics and insights - total watched, most watched genres, favorite directors, etc. Use this when the user asks about their viewing habits, stats, most-watched, favorite genres, etc.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "get_watchlist",
+    description: "Get the user's watchlist - unwatched movies they've recently added. Use when asking about their watchlist or what they plan to watch.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "get_similar_movies",
+    description: "Find movies similar to a given movie. Use when the user asks for movies like X, similar to X, or 'more like' a specific movie.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: {
+          type: "string",
+          description: "The movie title to find similar movies for"
+        },
+        count: {
+          type: "number",
+          description: "Number of similar movies to return (default 5)"
+        }
+      },
+      required: ["title"]
+    }
+  },
+  {
+    name: "get_collections",
+    description: "List all collections in the user's library. Use when the user asks about their collections, curated lists, or organized groups of movies.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "get_collection_items",
+    description: "Get all movies/shows in a specific collection. Use when the user asks what's in a collection or wants to browse a specific collection.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        collection: {
+          type: "string",
+          description: "The name of the collection to browse"
+        }
+      },
+      required: ["collection"]
+    }
   }
 ];
 
 // Process tool calls
-async function processToolCall(toolName: string, toolInput: Record<string, string>): Promise<string> {
+async function processToolCall(toolName: string, toolInput: Record<string, string | number>): Promise<string> {
   if (toolName === "search_by_person") {
-    const results = await searchByPerson(toolInput.name);
+    const results = await searchByPerson(toolInput.name as string);
     if (results.movies.length === 0 && results.shows.length === 0) {
       return `No movies or shows found featuring "${toolInput.name}" in the library.`;
     }
     let response = "";
     if (results.movies.length > 0) {
       response += `Movies with ${toolInput.name} (${results.movies.length} found):\n`;
-      for (const movie of results.movies.slice(0, 30)) {
+      for (const movie of results.movies.slice(0, 15)) {
         const directors = movie.directors?.length ? ` - Dir: ${movie.directors.join(", ")}` : "";
-        const actors = movie.actors?.length ? ` - Cast: ${movie.actors.join(", ")}` : "";
-        response += `- ${movie.title} (${movie.year || "?"})${directors}${actors}\n`;
+        response += `- **${movie.title}** (${movie.year || "?"})${directors}\n`;
       }
-      if (results.movies.length > 30) {
-        response += `... and ${results.movies.length - 30} more movies\n`;
+      if (results.movies.length > 15) {
+        response += `... and ${results.movies.length - 15} more movies\n`;
       }
     }
     if (results.shows.length > 0) {
       response += `\nTV Shows with ${toolInput.name} (${results.shows.length} found):\n`;
-      for (const show of results.shows.slice(0, 20)) {
-        response += `- ${show.title} (${show.year || "?"}) - ${show.leafCount || "?"} episodes\n`;
+      for (const show of results.shows.slice(0, 10)) {
+        response += `- **${show.title}** (${show.year || "?"}) - ${show.leafCount || "?"} episodes\n`;
       }
     }
     return response;
   } else if (toolName === "search_library") {
-    const results = await searchLibrary(toolInput.query);
+    const results = await searchLibrary(toolInput.query as string);
     if (results.length === 0) {
       return `No results found for "${toolInput.query}" in the library.`;
     }
     let response = `Search results for "${toolInput.query}" (${results.length} found):\n`;
-    for (const item of results.slice(0, 20)) {
+    for (const item of results.slice(0, 15)) {
       const type = item.type === "movie" ? "Movie" : item.type === "show" ? "TV Show" : item.type;
       const directors = item.directors?.length ? ` - Dir: ${item.directors.join(", ")}` : "";
-      const actors = item.actors?.length ? ` - Cast: ${item.actors.join(", ")}` : "";
-      response += `- [${type}] ${item.title} (${item.year || "?"})${directors}${actors}\n`;
+      response += `- [${type}] **${item.title}** (${item.year || "?"})${directors}\n`;
     }
     return response;
   } else if (toolName === "get_recommendations") {
-    const count = parseInt(toolInput.count) || 5;
-    const genre = toolInput.genre;
+    const count = (toolInput.count as number) || 5;
+    const genre = toolInput.genre as string;
     const movies = await getUnwatchedMovies(count, genre);
     if (movies.length === 0) {
       return genre
@@ -138,16 +209,94 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     return response;
   } else if (toolName === "search_by_genre") {
     const type = (toolInput.type as "movie" | "show") || "movie";
-    const results = await searchByGenre(toolInput.genre, type);
+    const results = await searchByGenre(toolInput.genre as string, type);
     if (results.length === 0) {
       return `No ${type}s found in the ${toolInput.genre} genre.`;
     }
-    // Shuffle and pick random selection to avoid always showing same results
-    const shuffled = results.sort(() => Math.random() - 0.5).slice(0, 15);
+    const shuffled = results.sort(() => Math.random() - 0.5).slice(0, 12);
     let response = `Found ${results.length} ${type}s in ${toolInput.genre}. Here are some:\n`;
     for (const item of shuffled) {
       const watched = item.viewCount ? " [WATCHED]" : "";
-      response += `- ${item.title} (${item.year || "?"})${watched}\n`;
+      response += `- **${item.title}** (${item.year || "?"})${watched}\n`;
+    }
+    return response;
+  } else if (toolName === "get_watch_history") {
+    const limit = (toolInput.limit as number) || 20;
+    const history = await getWatchHistory(limit);
+    if (history.length === 0) {
+      return "No watch history found.";
+    }
+    let response = `Your recent watch history (${history.length} items):\n`;
+    for (const item of history) {
+      const date = item.lastViewedAt ? new Date(item.lastViewedAt * 1000).toLocaleDateString() : "?";
+      const name = item.type === "episode"
+        ? `${item.grandparentTitle} S${item.parentIndex}E${item.index} "${item.title}"`
+        : `**${item.title}** (${item.year || "?"})`;
+      response += `- ${name} - watched ${date}\n`;
+    }
+    return response;
+  } else if (toolName === "get_watch_stats") {
+    const stats = await getWatchStats();
+    let response = `Your viewing stats:\n`;
+    response += `- Total movies watched: ${stats.totalWatched}\n`;
+    response += `- Watched this week: ${stats.watchedThisWeek}\n`;
+    response += `- Watched this month: ${stats.watchedThisMonth}\n\n`;
+
+    if (stats.topGenres.length > 0) {
+      response += `Your top genres:\n`;
+      for (const g of stats.topGenres) {
+        response += `- ${g.genre}: ${g.count} movies\n`;
+      }
+    }
+
+    if (stats.mostWatchedDirectors.length > 0) {
+      response += `\nMost watched directors:\n`;
+      for (const d of stats.mostWatchedDirectors) {
+        response += `- ${d.name}: ${d.count} movies\n`;
+      }
+    }
+    return response;
+  } else if (toolName === "get_watchlist") {
+    const watchlist = await getWatchlist();
+    if (watchlist.length === 0) {
+      return "Your watchlist is empty (no recently added unwatched movies).";
+    }
+    let response = `Your watchlist (${watchlist.length} unwatched recently-added movies):\n`;
+    for (const item of watchlist) {
+      const genres = item.genres?.slice(0, 2).join(", ") || "";
+      response += `- **${item.title}** (${item.year || "?"})${genres ? ` [${genres}]` : ""}\n`;
+    }
+    return response;
+  } else if (toolName === "get_similar_movies") {
+    const count = (toolInput.count as number) || 5;
+    const similar = await getSimilarMovies(toolInput.title as string, count);
+    if (similar.length === 0) {
+      return `Couldn't find movies similar to "${toolInput.title}" - the movie may not be in the library.`;
+    }
+    let response = `Movies similar to "${toolInput.title}":\n`;
+    for (const movie of similar) {
+      const genres = movie.genres?.slice(0, 2).join(", ") || "";
+      response += `- **${movie.title}** (${movie.year || "?"})${genres ? ` [${genres}]` : ""}\n`;
+    }
+    return response;
+  } else if (toolName === "get_collections") {
+    const collections = await getCollections();
+    if (collections.length === 0) {
+      return "No collections found in your library.";
+    }
+    let response = `Your collections (${collections.length} total):\n`;
+    for (const col of collections) {
+      response += `- **${col.title}** (${col.count} items)\n`;
+    }
+    return response;
+  } else if (toolName === "get_collection_items") {
+    const items = await getCollectionItems(toolInput.collection as string);
+    if (items.length === 0) {
+      return `Collection "${toolInput.collection}" not found or is empty.`;
+    }
+    let response = `"${toolInput.collection}" collection (${items.length} items):\n`;
+    for (const item of items) {
+      response += `- **${item.title}** (${item.year || "?"})\n`;
     }
     return response;
   }
@@ -185,6 +334,9 @@ IMPORTANT - Always use tools to get accurate information:
 - Use search_by_genre when asking about specific genres like "comedies", "horror movies", "sci-fi"
 - Use search_by_person when asking about actors or directors
 - Use search_library to find specific titles
+- Use get_watch_history when asking about their viewing history or what they've watched
+- Use get_watch_stats when asking about viewing statistics, habits, top genres, or most-watched
+- Use get_watchlist when asking about their watchlist or what they plan to watch
 
 Guidelines:
 - Be conversational and friendly
@@ -199,7 +351,7 @@ Guidelines:
       content: m.content,
     }));
 
-    // First API call
+    // Handle tool use first (non-streaming)
     let response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
@@ -208,7 +360,6 @@ Guidelines:
       messages: apiMessages,
     });
 
-    // Handle tool use - loop until we get a final response
     while (response.stop_reason === "tool_use") {
       const toolUseBlock = response.content.find(
         (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
@@ -218,10 +369,9 @@ Guidelines:
 
       const toolResult = await processToolCall(
         toolUseBlock.name,
-        toolUseBlock.input as Record<string, string>
+        toolUseBlock.input as Record<string, string | number>
       );
 
-      // Continue the conversation with tool result
       apiMessages.push({
         role: "assistant",
         content: response.content,
@@ -246,13 +396,35 @@ Guidelines:
       });
     }
 
-    // Extract final text response
+    // Extract the final text response
     const textBlock = response.content.find(
       (block): block is Anthropic.TextBlock => block.type === "text"
     );
-    const assistantMessage = textBlock?.text || "";
 
-    return Response.json({ message: assistantMessage });
+    const finalText = textBlock?.text || "I couldn't generate a response.";
+
+    // Stream the response
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        // Send text in chunks for streaming effect
+        const chunkSize = 15;
+        for (let i = 0; i < finalText.length; i += chunkSize) {
+          const chunk = finalText.slice(i, i + chunkSize);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+        }
+        controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+        controller.close();
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
   } catch (error: unknown) {
     console.error("Chat API error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

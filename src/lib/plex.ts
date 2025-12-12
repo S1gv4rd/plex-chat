@@ -1,7 +1,11 @@
-// Plex API client for fetching library data
+// Plex API client with caching and optimized fetching
 
 const PLEX_URL = process.env.PLEX_URL;
 const PLEX_TOKEN = process.env.PLEX_TOKEN;
+
+// Simple in-memory cache with TTL
+const cache = new Map<string, { data: any; expires: number }>();
+const CACHE_TTL = 60 * 1000; // 1 minute cache
 
 interface PlexMediaItem {
   ratingKey: string;
@@ -9,24 +13,17 @@ interface PlexMediaItem {
   type: string;
   year?: number;
   summary?: string;
-  rating?: number;
-  audienceRating?: number;
-  contentRating?: string;
-  duration?: number;
   genres?: string[];
   directors?: string[];
   actors?: string[];
-  studio?: string;
   addedAt?: number;
   lastViewedAt?: number;
   viewCount?: number;
-  thumb?: string;
-  grandparentTitle?: string; // For episodes - show name
-  parentTitle?: string; // For episodes - season name
-  index?: number; // Episode number
-  parentIndex?: number; // Season number
-  childCount?: number; // For shows - number of seasons
-  leafCount?: number; // For shows - total episodes
+  grandparentTitle?: string;
+  parentTitle?: string;
+  index?: number;
+  parentIndex?: number;
+  leafCount?: number;
 }
 
 interface PlexLibrary {
@@ -45,279 +42,357 @@ interface PlexLibrarySummary {
   recentlyWatched: PlexMediaItem[];
 }
 
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (entry && entry.expires > Date.now()) {
+    return entry.data as T;
+  }
+  cache.delete(key);
+  return null;
+}
+
+function setCache(key: string, data: any, ttl = CACHE_TTL): void {
+  cache.set(key, { data, expires: Date.now() + ttl });
+}
+
 async function plexFetch(endpoint: string): Promise<any> {
   if (!PLEX_URL || !PLEX_TOKEN) {
     throw new Error("Plex URL and Token must be configured");
   }
 
+  const cacheKey = endpoint;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
   const url = `${PLEX_URL}${endpoint}`;
   const separator = endpoint.includes("?") ? "&" : "?";
 
   const response = await fetch(`${url}${separator}X-Plex-Token=${PLEX_TOKEN}`, {
-    headers: {
-      Accept: "application/json",
-    },
+    headers: { Accept: "application/json" },
   });
 
   if (!response.ok) {
-    throw new Error(`Plex API error: ${response.status} ${response.statusText}`);
+    throw new Error(`Plex API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  setCache(cacheKey, data);
+  return data;
 }
 
-export async function getLibraries(): Promise<PlexLibrary[]> {
+// Cached libraries fetch
+let librariesCache: { data: PlexLibrary[]; expires: number } | null = null;
+
+async function getLibraries(): Promise<PlexLibrary[]> {
+  if (librariesCache && librariesCache.expires > Date.now()) {
+    return librariesCache.data;
+  }
+
   const data = await plexFetch("/library/sections");
-  return data.MediaContainer.Directory.map((lib: any) => ({
+  const libraries = data.MediaContainer.Directory.map((lib: any) => ({
     key: lib.key,
     title: lib.title,
     type: lib.type,
   }));
-}
 
-export async function getLibraryItems(
-  libraryKey: string,
-  limit?: number
-): Promise<PlexMediaItem[]> {
-  const endpoint = limit
-    ? `/library/sections/${libraryKey}/all?X-Plex-Container-Start=0&X-Plex-Container-Size=${limit}`
-    : `/library/sections/${libraryKey}/all`;
-
-  const data = await plexFetch(endpoint);
-  return parseMediaItems(data.MediaContainer.Metadata || []);
-}
-
-export async function getRecentlyAdded(limit = 20): Promise<PlexMediaItem[]> {
-  const data = await plexFetch(`/library/recentlyAdded?X-Plex-Container-Size=${limit}`);
-  return parseMediaItems(data.MediaContainer.Metadata || []);
-}
-
-export async function getOnDeck(): Promise<PlexMediaItem[]> {
-  const data = await plexFetch("/library/onDeck");
-  return parseMediaItems(data.MediaContainer.Metadata || []);
-}
-
-export async function searchLibrary(query: string): Promise<PlexMediaItem[]> {
-  const data = await plexFetch(`/search?query=${encodeURIComponent(query)}`);
-  return parseMediaItems(data.MediaContainer.Metadata || []);
-}
-
-// Search for movies/shows by actor or director
-export async function searchByPerson(name: string): Promise<{ movies: PlexMediaItem[]; shows: PlexMediaItem[] }> {
-  const libraries = await getLibraries();
-  const results: { movies: PlexMediaItem[]; shows: PlexMediaItem[] } = { movies: [], shows: [] };
-
-  for (const lib of libraries) {
-    if (lib.type === "movie") {
-      // Search by actor
-      try {
-        const actorData = await plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`);
-        results.movies.push(...parseMediaItems(actorData.MediaContainer.Metadata || []));
-      } catch (e) { /* no results */ }
-
-      // Search by director
-      try {
-        const directorData = await plexFetch(`/library/sections/${lib.key}/all?director=${encodeURIComponent(name)}`);
-        const directorMovies = parseMediaItems(directorData.MediaContainer.Metadata || []);
-        // Avoid duplicates
-        for (const movie of directorMovies) {
-          if (!results.movies.find(m => m.ratingKey === movie.ratingKey)) {
-            results.movies.push(movie);
-          }
-        }
-      } catch (e) { /* no results */ }
-    } else if (lib.type === "show") {
-      try {
-        const actorData = await plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`);
-        results.shows.push(...parseMediaItems(actorData.MediaContainer.Metadata || []));
-      } catch (e) { /* no results */ }
-    }
-  }
-
-  return results;
-}
-
-// Get detailed info about a specific movie or show
-export async function getMediaDetails(title: string): Promise<PlexMediaItem | null> {
-  const searchResults = await searchLibrary(title);
-  if (searchResults.length === 0) return null;
-
-  // Return the first match with full details
-  const item = searchResults[0];
-  return item;
-}
-
-// Get random movies for recommendations
-export async function getRandomMovies(count = 10, genre?: string): Promise<PlexMediaItem[]> {
-  const libraries = await getLibraries();
-  const movieLibraries = libraries.filter((lib) => lib.type === "movie");
-
-  const allMovies: PlexMediaItem[] = [];
-  for (const lib of movieLibraries) {
-    let endpoint = `/library/sections/${lib.key}/all`;
-    if (genre) {
-      endpoint += `?genre=${encodeURIComponent(genre)}`;
-    }
-    const data = await plexFetch(endpoint);
-    allMovies.push(...parseMediaItems(data.MediaContainer.Metadata || []));
-  }
-
-  // Shuffle and return random selection
-  const shuffled = allMovies.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-// Get unwatched movies for recommendations
-export async function getUnwatchedMovies(count = 20, genre?: string): Promise<PlexMediaItem[]> {
-  const libraries = await getLibraries();
-  const movieLibraries = libraries.filter((lib) => lib.type === "movie");
-
-  const unwatched: PlexMediaItem[] = [];
-  for (const lib of movieLibraries) {
-    let endpoint = `/library/sections/${lib.key}/unwatched`;
-    if (genre) {
-      endpoint += `?genre=${encodeURIComponent(genre)}`;
-    }
-    const data = await plexFetch(endpoint);
-    unwatched.push(...parseMediaItems(data.MediaContainer.Metadata || []));
-  }
-
-  // Shuffle and return random selection
-  const shuffled = unwatched.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-// Search by genre
-export async function searchByGenre(genre: string, type: "movie" | "show" = "movie"): Promise<PlexMediaItem[]> {
-  const libraries = await getLibraries();
-  const filteredLibraries = libraries.filter((lib) => lib.type === type);
-
-  const results: PlexMediaItem[] = [];
-  for (const lib of filteredLibraries) {
-    try {
-      const data = await plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`);
-      results.push(...parseMediaItems(data.MediaContainer.Metadata || []));
-    } catch (e) { /* no results */ }
-  }
-
-  return results;
-}
-
-export async function getLibrarySummary(): Promise<PlexLibrarySummary> {
-  const libraries = await getLibraries();
-
-  let totalMovies = 0;
-  let totalShows = 0;
-  let totalEpisodes = 0;
-
-  // Get counts for each library
-  for (const lib of libraries) {
-    try {
-      const data = await plexFetch(`/library/sections/${lib.key}/all?X-Plex-Container-Size=0`);
-      const count = data.MediaContainer.totalSize || data.MediaContainer.size || 0;
-      lib.itemCount = count;
-
-      if (lib.type === "movie") {
-        totalMovies += count;
-      } else if (lib.type === "show") {
-        totalShows += count;
-        // Get episode count
-        const episodeData = await plexFetch(
-          `/library/sections/${lib.key}/all?type=4&X-Plex-Container-Size=0`
-        );
-        totalEpisodes += episodeData.MediaContainer.totalSize || episodeData.MediaContainer.size || 0;
-      }
-    } catch (e) {
-      console.error(`Error fetching library ${lib.title}:`, e);
-    }
-  }
-
-  const recentlyAdded = await getRecentlyAdded(10);
-
-  let recentlyWatched: PlexMediaItem[] = [];
-  try {
-    recentlyWatched = await getOnDeck();
-  } catch (e) {
-    // On deck might not be available
-  }
-
-  return {
-    libraries,
-    totalMovies,
-    totalShows,
-    totalEpisodes,
-    recentlyAdded,
-    recentlyWatched,
-  };
-}
-
-export async function getAllMovies(): Promise<PlexMediaItem[]> {
-  const libraries = await getLibraries();
-  const movieLibraries = libraries.filter((lib) => lib.type === "movie");
-
-  const allMovies: PlexMediaItem[] = [];
-  for (const lib of movieLibraries) {
-    const movies = await getLibraryItems(lib.key);
-    allMovies.push(...movies);
-  }
-
-  return allMovies;
-}
-
-export async function getAllShows(): Promise<PlexMediaItem[]> {
-  const libraries = await getLibraries();
-  const showLibraries = libraries.filter((lib) => lib.type === "show");
-
-  const allShows: PlexMediaItem[] = [];
-  for (const lib of showLibraries) {
-    const shows = await getLibraryItems(lib.key);
-    allShows.push(...shows);
-  }
-
-  return allShows;
+  librariesCache = { data: libraries, expires: Date.now() + 5 * 60 * 1000 }; // 5 min cache
+  return libraries;
 }
 
 function parseMediaItems(items: any[]): PlexMediaItem[] {
+  if (!items) return [];
   return items.map((item: any) => ({
     ratingKey: item.ratingKey,
     title: item.title,
     type: item.type,
     year: item.year,
     summary: item.summary,
-    rating: item.rating,
-    audienceRating: item.audienceRating,
-    contentRating: item.contentRating,
-    duration: item.duration,
-    genres: item.Genre?.map((g: any) => g.tag) || [],
-    directors: item.Director?.map((d: any) => d.tag) || [],
-    actors: item.Role?.map((r: any) => r.tag).slice(0, 5) || [],
-    studio: item.studio,
+    genres: item.Genre?.map((g: any) => g.tag),
+    directors: item.Director?.map((d: any) => d.tag),
+    actors: item.Role?.slice(0, 5).map((r: any) => r.tag),
     addedAt: item.addedAt,
     lastViewedAt: item.lastViewedAt,
     viewCount: item.viewCount,
-    thumb: item.thumb,
     grandparentTitle: item.grandparentTitle,
     parentTitle: item.parentTitle,
     index: item.index,
     parentIndex: item.parentIndex,
-    childCount: item.childCount,
     leafCount: item.leafCount,
   }));
 }
 
-// Format library data as context for Claude - minimal format to reduce tokens
+export async function searchLibrary(query: string): Promise<PlexMediaItem[]> {
+  const data = await plexFetch(`/search?query=${encodeURIComponent(query)}`);
+  return parseMediaItems(data.MediaContainer.Metadata);
+}
+
+export async function searchByPerson(name: string): Promise<{ movies: PlexMediaItem[]; shows: PlexMediaItem[] }> {
+  const libraries = await getLibraries();
+  const results: { movies: PlexMediaItem[]; shows: PlexMediaItem[] } = { movies: [], shows: [] };
+  const seen = new Set<string>();
+
+  // Parallel fetch for all libraries
+  const fetches = libraries.flatMap(lib => {
+    if (lib.type === "movie") {
+      return [
+        plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`).catch(() => null),
+        plexFetch(`/library/sections/${lib.key}/all?director=${encodeURIComponent(name)}`).catch(() => null),
+      ];
+    } else if (lib.type === "show") {
+      return [plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`).catch(() => null)];
+    }
+    return [];
+  });
+
+  const responses = await Promise.all(fetches);
+  const movieLibs = libraries.filter(l => l.type === "movie").length;
+
+  // Process movie results (actor + director per library)
+  for (let i = 0; i < movieLibs * 2; i++) {
+    const data = responses[i];
+    if (data?.MediaContainer?.Metadata) {
+      for (const item of parseMediaItems(data.MediaContainer.Metadata)) {
+        if (!seen.has(item.ratingKey)) {
+          seen.add(item.ratingKey);
+          results.movies.push(item);
+        }
+      }
+    }
+  }
+
+  // Process show results
+  for (let i = movieLibs * 2; i < responses.length; i++) {
+    const data = responses[i];
+    if (data?.MediaContainer?.Metadata) {
+      results.shows.push(...parseMediaItems(data.MediaContainer.Metadata));
+    }
+  }
+
+  return results;
+}
+
+export async function getUnwatchedMovies(count = 20, genre?: string): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const movieLibraries = libraries.filter(lib => lib.type === "movie");
+
+  const fetches = movieLibraries.map(lib => {
+    const endpoint = genre
+      ? `/library/sections/${lib.key}/unwatched?genre=${encodeURIComponent(genre)}`
+      : `/library/sections/${lib.key}/unwatched`;
+    return plexFetch(endpoint).catch(() => null);
+  });
+
+  const responses = await Promise.all(fetches);
+  const unwatched: PlexMediaItem[] = [];
+
+  for (const data of responses) {
+    if (data?.MediaContainer?.Metadata) {
+      unwatched.push(...parseMediaItems(data.MediaContainer.Metadata));
+    }
+  }
+
+  // Fisher-Yates shuffle for better randomness
+  for (let i = unwatched.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unwatched[i], unwatched[j]] = [unwatched[j], unwatched[i]];
+  }
+
+  return unwatched.slice(0, count);
+}
+
+export async function searchByGenre(genre: string, type: "movie" | "show" = "movie"): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const filteredLibraries = libraries.filter(lib => lib.type === type);
+
+  const fetches = filteredLibraries.map(lib =>
+    plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`).catch(() => null)
+  );
+
+  const responses = await Promise.all(fetches);
+  const results: PlexMediaItem[] = [];
+
+  for (const data of responses) {
+    if (data?.MediaContainer?.Metadata) {
+      results.push(...parseMediaItems(data.MediaContainer.Metadata));
+    }
+  }
+
+  return results;
+}
+
+export async function getWatchHistory(limit = 20): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+
+  const fetches = libraries
+    .filter(lib => lib.type === "movie" || lib.type === "show")
+    .map(lib => {
+      const endpoint = lib.type === "movie"
+        ? `/library/sections/${lib.key}/all?viewCount>=1&sort=lastViewedAt:desc&X-Plex-Container-Size=${limit}`
+        : `/library/sections/${lib.key}/all?type=4&viewCount>=1&sort=lastViewedAt:desc&X-Plex-Container-Size=${limit}`;
+      return plexFetch(endpoint).catch(() => null);
+    });
+
+  const responses = await Promise.all(fetches);
+  const watched: PlexMediaItem[] = [];
+
+  for (const data of responses) {
+    if (data?.MediaContainer?.Metadata) {
+      watched.push(...parseMediaItems(data.MediaContainer.Metadata));
+    }
+  }
+
+  return watched
+    .filter(item => item.lastViewedAt)
+    .sort((a, b) => (b.lastViewedAt || 0) - (a.lastViewedAt || 0))
+    .slice(0, limit);
+}
+
+export async function getWatchStats(): Promise<{
+  totalWatched: number;
+  watchedThisWeek: number;
+  watchedThisMonth: number;
+  topGenres: { genre: string; count: number }[];
+  mostWatchedDirectors: { name: string; count: number }[];
+}> {
+  const libraries = await getLibraries();
+  const movieLibraries = libraries.filter(lib => lib.type === "movie");
+
+  const fetches = movieLibraries.map(lib =>
+    plexFetch(`/library/sections/${lib.key}/all?viewCount>=1`).catch(() => null)
+  );
+
+  const responses = await Promise.all(fetches);
+
+  let totalWatched = 0;
+  let watchedThisWeek = 0;
+  let watchedThisMonth = 0;
+  const genreCounts: Record<string, number> = {};
+  const directorCounts: Record<string, number> = {};
+
+  const now = Date.now() / 1000;
+  const oneWeekAgo = now - 7 * 24 * 60 * 60;
+  const oneMonthAgo = now - 30 * 24 * 60 * 60;
+
+  for (const data of responses) {
+    if (!data?.MediaContainer?.Metadata) continue;
+
+    for (const item of parseMediaItems(data.MediaContainer.Metadata)) {
+      totalWatched++;
+      if (item.lastViewedAt && item.lastViewedAt > oneWeekAgo) watchedThisWeek++;
+      if (item.lastViewedAt && item.lastViewedAt > oneMonthAgo) watchedThisMonth++;
+
+      for (const genre of item.genres || []) {
+        genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+      }
+      for (const director of item.directors || []) {
+        directorCounts[director] = (directorCounts[director] || 0) + 1;
+      }
+    }
+  }
+
+  return {
+    totalWatched,
+    watchedThisWeek,
+    watchedThisMonth,
+    topGenres: Object.entries(genreCounts)
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5),
+    mostWatchedDirectors: Object.entries(directorCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5),
+  };
+}
+
+export async function getWatchlist(): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const movieLibraries = libraries.filter(lib => lib.type === "movie");
+
+  const fetches = movieLibraries.map(lib =>
+    plexFetch(`/library/sections/${lib.key}/all?unwatched=1&sort=addedAt:desc&X-Plex-Container-Size=30`).catch(() => null)
+  );
+
+  const responses = await Promise.all(fetches);
+  const twoWeeksAgo = Date.now() / 1000 - 14 * 24 * 60 * 60;
+  const watchlist: PlexMediaItem[] = [];
+
+  for (const data of responses) {
+    if (!data?.MediaContainer?.Metadata) continue;
+    for (const item of parseMediaItems(data.MediaContainer.Metadata)) {
+      if (item.addedAt && item.addedAt > twoWeeksAgo) {
+        watchlist.push(item);
+      }
+    }
+  }
+
+  return watchlist.slice(0, 20);
+}
+
+export async function getLibrarySummary(): Promise<PlexLibrarySummary> {
+  const libraries = await getLibraries();
+
+  // Parallel fetch all library counts + recently added + on deck
+  const countFetches = libraries.map(lib =>
+    plexFetch(`/library/sections/${lib.key}/all?X-Plex-Container-Size=0`).catch(() => null)
+  );
+
+  const episodeFetches = libraries
+    .filter(lib => lib.type === "show")
+    .map(lib =>
+      plexFetch(`/library/sections/${lib.key}/all?type=4&X-Plex-Container-Size=0`).catch(() => null)
+    );
+
+  const [countResponses, episodeResponses, recentData, onDeckData] = await Promise.all([
+    Promise.all(countFetches),
+    Promise.all(episodeFetches),
+    plexFetch("/library/recentlyAdded?X-Plex-Container-Size=10").catch(() => null),
+    plexFetch("/library/onDeck").catch(() => null),
+  ]);
+
+  let totalMovies = 0;
+  let totalShows = 0;
+  let totalEpisodes = 0;
+  let episodeIdx = 0;
+
+  libraries.forEach((lib, i) => {
+    const count = countResponses[i]?.MediaContainer?.totalSize ||
+                  countResponses[i]?.MediaContainer?.size || 0;
+    lib.itemCount = count;
+
+    if (lib.type === "movie") {
+      totalMovies += count;
+    } else if (lib.type === "show") {
+      totalShows += count;
+      totalEpisodes += episodeResponses[episodeIdx]?.MediaContainer?.totalSize ||
+                       episodeResponses[episodeIdx]?.MediaContainer?.size || 0;
+      episodeIdx++;
+    }
+  });
+
+  return {
+    libraries,
+    totalMovies,
+    totalShows,
+    totalEpisodes,
+    recentlyAdded: parseMediaItems(recentData?.MediaContainer?.Metadata),
+    recentlyWatched: parseMediaItems(onDeckData?.MediaContainer?.Metadata),
+  };
+}
+
 export async function getLibraryContext(): Promise<string> {
   const summary = await getLibrarySummary();
 
   let context = `Plex Library: ${summary.totalMovies} movies, ${summary.totalShows} TV shows, ${summary.totalEpisodes} episodes.\n\n`;
 
-  // Recently added
-  context += `Recently Added:\n`;
-  for (const item of summary.recentlyAdded.slice(0, 10)) {
-    const name = item.type === "episode"
-      ? `${item.grandparentTitle} S${item.parentIndex}E${item.index}`
-      : `${item.title} (${item.year || "?"})`;
-    context += `- ${name}\n`;
+  if (summary.recentlyAdded.length > 0) {
+    context += `Recently Added:\n`;
+    for (const item of summary.recentlyAdded.slice(0, 8)) {
+      const name = item.type === "episode"
+        ? `${item.grandparentTitle} S${item.parentIndex}E${item.index}`
+        : `${item.title} (${item.year || "?"})`;
+      context += `- ${name}\n`;
+    }
   }
 
   if (summary.recentlyWatched.length > 0) {
@@ -330,9 +405,124 @@ export async function getLibraryContext(): Promise<string> {
     }
   }
 
-  context += `\nNote: Use the search tools to find specific movies, shows, actors, or directors. The full library is too large to list here.`;
+  context += `\nUse search tools for specific queries.`;
 
   return context;
+}
+
+// Get similar/related movies
+export async function getSimilarMovies(title: string, count = 5): Promise<PlexMediaItem[]> {
+  // First find the movie
+  const searchResults = await searchLibrary(title);
+  const movie = searchResults.find(m => m.type === "movie");
+
+  if (!movie) return [];
+
+  try {
+    const data = await plexFetch(`/library/metadata/${movie.ratingKey}/similar`);
+    const similar = parseMediaItems(data?.MediaContainer?.Metadata);
+    return similar.slice(0, count);
+  } catch {
+    // Fallback: find movies with same genre/director
+    const libraries = await getLibraries();
+    const movieLibs = libraries.filter(l => l.type === "movie");
+    const candidates: PlexMediaItem[] = [];
+
+    for (const lib of movieLibs) {
+      if (movie.genres?.[0]) {
+        const genreData = await plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(movie.genres[0])}`).catch(() => null);
+        if (genreData?.MediaContainer?.Metadata) {
+          candidates.push(...parseMediaItems(genreData.MediaContainer.Metadata));
+        }
+      }
+    }
+
+    // Filter out the original movie and shuffle
+    const filtered = candidates.filter(m => m.ratingKey !== movie.ratingKey);
+    for (let i = filtered.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+    }
+    return filtered.slice(0, count);
+  }
+}
+
+// Get collections
+export async function getCollections(): Promise<{ key: string; title: string; count: number }[]> {
+  const libraries = await getLibraries();
+  const collections: { key: string; title: string; count: number }[] = [];
+
+  const fetches = libraries.map(lib =>
+    plexFetch(`/library/sections/${lib.key}/collections`).catch(() => null)
+  );
+
+  const responses = await Promise.all(fetches);
+
+  for (const data of responses) {
+    if (data?.MediaContainer?.Metadata) {
+      for (const col of data.MediaContainer.Metadata) {
+        collections.push({
+          key: col.ratingKey,
+          title: col.title,
+          count: col.childCount || 0,
+        });
+      }
+    }
+  }
+
+  return collections;
+}
+
+// Get items in a collection
+export async function getCollectionItems(collectionTitle: string): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+
+  for (const lib of libraries) {
+    try {
+      const colData = await plexFetch(`/library/sections/${lib.key}/collections`);
+      const collection = colData?.MediaContainer?.Metadata?.find(
+        (c: any) => c.title.toLowerCase() === collectionTitle.toLowerCase()
+      );
+
+      if (collection) {
+        const itemsData = await plexFetch(`/library/collections/${collection.ratingKey}/children`);
+        return parseMediaItems(itemsData?.MediaContainer?.Metadata);
+      }
+    } catch {}
+  }
+
+  return [];
+}
+
+// Get personalized suggestions based on watch history
+export async function getPersonalizedSuggestions(): Promise<string[]> {
+  const stats = await getWatchStats();
+  const suggestions: string[] = [];
+
+  // Add genre-based suggestions
+  if (stats.topGenres.length > 0) {
+    const topGenre = stats.topGenres[0].genre;
+    suggestions.push(`More ${topGenre.toLowerCase()} movies`);
+    if (stats.topGenres[1]) {
+      suggestions.push(`${stats.topGenres[1].genre} films I haven't seen`);
+    }
+  }
+
+  // Add director-based suggestions
+  if (stats.mostWatchedDirectors.length > 0) {
+    suggestions.push(`More from ${stats.mostWatchedDirectors[0].name}`);
+  }
+
+  // Add time-based suggestions
+  if (stats.watchedThisWeek > 0) {
+    suggestions.push("Something different from what I watched this week");
+  }
+
+  // Add discovery suggestions
+  suggestions.push("Hidden gems I might have missed");
+  suggestions.push("Critically acclaimed unwatched films");
+
+  return suggestions.slice(0, 4);
 }
 
 export type { PlexMediaItem, PlexLibrary, PlexLibrarySummary };

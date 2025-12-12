@@ -1,10 +1,10 @@
 "use client";
 
+import { memo } from "react";
 import { PlexLibrarySummary } from "@/lib/plex";
 
 interface LibraryStatsProps {
   summary: PlexLibrarySummary | null;
-  loading: boolean;
   error: string | null;
 }
 
@@ -15,16 +15,7 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-export default function LibraryStats({ summary, loading, error }: LibraryStatsProps) {
-  if (loading) {
-    return (
-      <div className="hidden sm:flex items-center gap-4">
-        <div className="animate-pulse h-4 w-16 bg-plex-gray/50 rounded" />
-        <div className="animate-pulse h-4 w-16 bg-plex-gray/50 rounded" />
-      </div>
-    );
-  }
-
+const LibraryStats = memo(function LibraryStats({ summary, error }: LibraryStatsProps) {
   if (error) {
     return (
       <div className="hidden sm:block">
@@ -47,4 +38,6 @@ export default function LibraryStats({ summary, loading, error }: LibraryStatsPr
       <span>episodes</span>
     </div>
   );
-}
+});
+
+export default LibraryStats;
