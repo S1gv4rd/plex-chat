@@ -200,6 +200,35 @@ export async function getUnwatchedMovies(count = 20, genre?: string): Promise<Pl
   return unwatched.slice(0, count);
 }
 
+export async function getUnwatchedShows(count = 10, genre?: string): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const showLibraries = libraries.filter(lib => lib.type === "show");
+
+  const fetches = showLibraries.map(lib => {
+    const endpoint = genre
+      ? `/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`
+      : `/library/sections/${lib.key}/all`;
+    return plexFetch(endpoint).catch(() => null);
+  });
+
+  const responses = await Promise.all(fetches);
+  const shows: PlexMediaItem[] = [];
+
+  for (const data of responses) {
+    if (data?.MediaContainer?.Metadata) {
+      shows.push(...parseMediaItems(data.MediaContainer.Metadata));
+    }
+  }
+
+  // Fisher-Yates shuffle
+  for (let i = shows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shows[i], shows[j]] = [shows[j], shows[i]];
+  }
+
+  return shows.slice(0, count);
+}
+
 export async function searchByGenre(genre: string, type: "movie" | "show" = "movie"): Promise<PlexMediaItem[]> {
   const libraries = await getLibraries();
   const filteredLibraries = libraries.filter(lib => lib.type === type);

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems } from "@/lib/plex";
+import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
 const anthropic = new Anthropic({
@@ -43,13 +43,31 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "get_recommendations",
-    description: "Get movie recommendations from the user's library. Use this when the user asks for something to watch, wants recommendations, or asks 'what should I watch'. Returns random unwatched movies, optionally filtered by genre.",
+    description: "Get MOVIE recommendations from the user's library. Use ONLY for movie recommendations. Returns random unwatched movies, optionally filtered by genre. Do NOT use this for TV shows or binge requests.",
     input_schema: {
       type: "object" as const,
       properties: {
         genre: {
           type: "string",
           description: "Optional genre to filter by (e.g., 'Comedy', 'Action', 'Drama', 'Horror', 'Sci-Fi', 'Thriller')"
+        },
+        count: {
+          type: "number",
+          description: "Number of recommendations to return (default 5)"
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "get_tv_recommendations",
+    description: "Get TV SHOW recommendations for binge-watching. Use this when the user asks for something to 'binge', 'binge-watch', wants a 'series', 'TV show', or asks 'what show should I start'. Returns TV shows from the library.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        genre: {
+          type: "string",
+          description: "Optional genre to filter by (e.g., 'Comedy', 'Drama', 'Crime', 'Sci-Fi', 'Thriller')"
         },
         count: {
           type: "number",
@@ -207,6 +225,24 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
       response += `- **${movie.title}** (${movie.year || "?"})${genres ? ` [${genres}]` : ""}${summary}\n`;
     }
     return response;
+  } else if (toolName === "get_tv_recommendations") {
+    const count = (toolInput.count as number) || 5;
+    const genre = toolInput.genre as string;
+    const shows = await getUnwatchedShows(count, genre);
+    if (shows.length === 0) {
+      return genre
+        ? `No ${genre} TV shows found in the library.`
+        : "No TV shows found in the library.";
+    }
+    let response = genre
+      ? `Here are ${shows.length} ${genre} TV shows to binge from your library:\n`
+      : `Here are ${shows.length} TV shows to binge from your library:\n`;
+    for (const show of shows) {
+      const genres = show.genres?.slice(0, 3).join(", ") || "";
+      const episodes = show.leafCount ? ` - ${show.leafCount} episodes` : "";
+      response += `- **${show.title}** (${show.year || "?"})${genres ? ` [${genres}]` : ""}${episodes}\n`;
+    }
+    return response;
   } else if (toolName === "search_by_genre") {
     const type = (toolInput.type as "movie" | "show") || "movie";
     const results = await searchByGenre(toolInput.genre as string, type);
@@ -330,18 +366,23 @@ Here is a summary of their Plex library:
 ${libraryContext}
 
 IMPORTANT - Always use tools to get accurate information:
-- Use get_recommendations when the user asks "what should I watch", wants suggestions, or asks for recommendations
-- Use search_by_genre when asking about specific genres like "comedies", "horror movies", "sci-fi"
+- Use get_recommendations when the user asks "what should I watch", wants suggestions, or asks for recommendations (for MOVIES only)
+- Use search_by_genre when asking about specific genres like "comedies", "horror movies", "sci-fi" - set type to "show" for TV shows
 - Use search_by_person when asking about actors or directors
 - Use search_library to find specific titles
 - Use get_watch_history when asking about their viewing history or what they've watched
 - Use get_watch_stats when asking about viewing statistics, habits, top genres, or most-watched
 - Use get_watchlist when asking about their watchlist or what they plan to watch
 
+CRITICAL - Understand the difference between movies and TV shows:
+- "Binge", "binge-watch", "series", "show", "TV show", "what to start" = TV SHOWS (use search_by_genre with type="show")
+- "Movie", "film", "quick watch", "movie night" = MOVIES
+- When user asks for something to "binge" or a "weekend binge", they want TV SHOWS, not movies
+
 Guidelines:
 - Be conversational and friendly
 - Keep responses concise but helpful
-- When recommending, pick 3-5 movies and explain briefly why each might appeal to them
+- When recommending, pick 3-5 items and explain briefly why each might appeal to them
 - Don't just list the recently added items - use the tools to search the full library
 - "On Deck" shows what they're currently watching`;
 
