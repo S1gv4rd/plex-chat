@@ -147,6 +147,62 @@ export async function getMediaDetails(title: string): Promise<PlexMediaItem | nu
   return item;
 }
 
+// Get random movies for recommendations
+export async function getRandomMovies(count = 10, genre?: string): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const movieLibraries = libraries.filter((lib) => lib.type === "movie");
+
+  const allMovies: PlexMediaItem[] = [];
+  for (const lib of movieLibraries) {
+    let endpoint = `/library/sections/${lib.key}/all`;
+    if (genre) {
+      endpoint += `?genre=${encodeURIComponent(genre)}`;
+    }
+    const data = await plexFetch(endpoint);
+    allMovies.push(...parseMediaItems(data.MediaContainer.Metadata || []));
+  }
+
+  // Shuffle and return random selection
+  const shuffled = allMovies.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// Get unwatched movies for recommendations
+export async function getUnwatchedMovies(count = 20, genre?: string): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const movieLibraries = libraries.filter((lib) => lib.type === "movie");
+
+  const unwatched: PlexMediaItem[] = [];
+  for (const lib of movieLibraries) {
+    let endpoint = `/library/sections/${lib.key}/unwatched`;
+    if (genre) {
+      endpoint += `?genre=${encodeURIComponent(genre)}`;
+    }
+    const data = await plexFetch(endpoint);
+    unwatched.push(...parseMediaItems(data.MediaContainer.Metadata || []));
+  }
+
+  // Shuffle and return random selection
+  const shuffled = unwatched.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+// Search by genre
+export async function searchByGenre(genre: string, type: "movie" | "show" = "movie"): Promise<PlexMediaItem[]> {
+  const libraries = await getLibraries();
+  const filteredLibraries = libraries.filter((lib) => lib.type === type);
+
+  const results: PlexMediaItem[] = [];
+  for (const lib of filteredLibraries) {
+    try {
+      const data = await plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`);
+      results.push(...parseMediaItems(data.MediaContainer.Metadata || []));
+    } catch (e) { /* no results */ }
+  }
+
+  return results;
+}
+
 export async function getLibrarySummary(): Promise<PlexLibrarySummary> {
   const libraries = await getLibraries();
 
@@ -219,19 +275,6 @@ export async function getAllShows(): Promise<PlexMediaItem[]> {
   }
 
   return allShows;
-}
-
-export async function getUnwatchedMovies(): Promise<PlexMediaItem[]> {
-  const libraries = await getLibraries();
-  const movieLibraries = libraries.filter((lib) => lib.type === "movie");
-
-  const unwatched: PlexMediaItem[] = [];
-  for (const lib of movieLibraries) {
-    const data = await plexFetch(`/library/sections/${lib.key}/unwatched`);
-    unwatched.push(...parseMediaItems(data.MediaContainer.Metadata || []));
-  }
-
-  return unwatched;
 }
 
 function parseMediaItems(items: any[]): PlexMediaItem[] {

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLibraryContext, searchByPerson, searchLibrary } from "@/lib/plex";
+import { getLibraryContext, searchByPerson, searchLibrary, getRandomMovies, getUnwatchedMovies, searchByGenre } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
 const anthropic = new Anthropic({
@@ -39,6 +39,42 @@ const tools: Anthropic.Tool[] = [
         }
       },
       required: ["query"]
+    }
+  },
+  {
+    name: "get_recommendations",
+    description: "Get movie recommendations from the user's library. Use this when the user asks for something to watch, wants recommendations, or asks 'what should I watch'. Returns random unwatched movies, optionally filtered by genre.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        genre: {
+          type: "string",
+          description: "Optional genre to filter by (e.g., 'Comedy', 'Action', 'Drama', 'Horror', 'Sci-Fi', 'Thriller')"
+        },
+        count: {
+          type: "number",
+          description: "Number of recommendations to return (default 5)"
+        }
+      },
+      required: []
+    }
+  },
+  {
+    name: "search_by_genre",
+    description: "Search for movies or TV shows by genre. Use this when the user asks about a specific genre like 'show me comedies' or 'what horror movies do I have'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        genre: {
+          type: "string",
+          description: "The genre to search for (e.g., 'Comedy', 'Action', 'Drama', 'Horror', 'Science Fiction', 'Thriller', 'Romance')"
+        },
+        type: {
+          type: "string",
+          description: "Type of content: 'movie' or 'show' (default: 'movie')"
+        }
+      },
+      required: ["genre"]
     }
   }
 ];
@@ -82,6 +118,40 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
       response += `- [${type}] ${item.title} (${item.year || "?"})${directors}${actors}\n`;
     }
     return response;
+  } else if (toolName === "get_recommendations") {
+    const count = parseInt(toolInput.count) || 5;
+    const genre = toolInput.genre;
+    const movies = await getUnwatchedMovies(count, genre);
+    if (movies.length === 0) {
+      return genre
+        ? `No unwatched ${genre} movies found in the library.`
+        : "No unwatched movies found in the library.";
+    }
+    let response = genre
+      ? `Here are ${movies.length} unwatched ${genre} movies from your library:\n`
+      : `Here are ${movies.length} unwatched movies from your library:\n`;
+    for (const movie of movies) {
+      const rating = movie.rating ? ` - Rating: ${movie.rating}/10` : "";
+      const genres = movie.genres?.slice(0, 3).join(", ") || "";
+      const summary = movie.summary ? ` - ${movie.summary.slice(0, 100)}...` : "";
+      response += `- **${movie.title}** (${movie.year || "?"})${rating}${genres ? ` [${genres}]` : ""}${summary}\n`;
+    }
+    return response;
+  } else if (toolName === "search_by_genre") {
+    const type = (toolInput.type as "movie" | "show") || "movie";
+    const results = await searchByGenre(toolInput.genre, type);
+    if (results.length === 0) {
+      return `No ${type}s found in the ${toolInput.genre} genre.`;
+    }
+    // Shuffle and pick random selection to avoid always showing same results
+    const shuffled = results.sort(() => Math.random() - 0.5).slice(0, 15);
+    let response = `Found ${results.length} ${type}s in ${toolInput.genre}. Here are some:\n`;
+    for (const item of shuffled) {
+      const rating = item.rating ? ` - Rating: ${item.rating}/10` : "";
+      const watched = item.viewCount ? " [WATCHED]" : "";
+      response += `- ${item.title} (${item.year || "?"})${rating}${watched}\n`;
+    }
+    return response;
   }
   return "Unknown tool";
 }
@@ -108,22 +178,22 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = `You are a helpful assistant that knows everything about the user's Plex media library. You help them discover what to watch, find movies or shows they might enjoy based on their collection, identify gaps in their library, and answer questions about their media.
 
-Here is the current state of their Plex library:
+Here is a summary of their Plex library:
 
 ${libraryContext}
 
+IMPORTANT - Always use tools to get accurate information:
+- Use get_recommendations when the user asks "what should I watch", wants suggestions, or asks for recommendations
+- Use search_by_genre when asking about specific genres like "comedies", "horror movies", "sci-fi"
+- Use search_by_person when asking about actors or directors
+- Use search_library to find specific titles
+
 Guidelines:
 - Be conversational and friendly
-- When recommending something to watch, explain why based on their existing collection and preferences
-- If they ask about movies/shows they don't have, acknowledge it and suggest similar things they DO have
-- You can suggest what's missing from their library if they ask
-- Reference specific titles, years, and ratings from their library
-- For TV shows, you know the number of seasons and episodes they have
-- Items marked * have been watched
-- "On Deck" shows what they're currently watching or should continue
 - Keep responses concise but helpful
-- IMPORTANT: When the user asks about specific actors, directors, or wants detailed cast/crew info, use the search_by_person tool to get accurate information
-- Use the search_library tool to find specific titles or check if content exists`;
+- When recommending, pick 3-5 movies and explain briefly why each might appeal to them
+- Don't just list the recently added items - use the tools to search the full library
+- "On Deck" shows what they're currently watching`;
 
     // Build messages for API
     const apiMessages: Anthropic.MessageParam[] = messages.map((m: Message) => ({
