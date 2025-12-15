@@ -535,7 +535,14 @@ Guidelines:
 - Don't just list the recently added items - use the tools to search the full library
 - "On Deck" shows what they're currently watching
 - IMPORTANT: Always try to use tools and give actual results. Don't just list options or ask clarifying questions - make your best attempt to find what the user is looking for. For vague queries like "book adaptations", search by genre (Drama, Fantasy) or search for well-known adaptations.
-- Never say you "can't" do something without trying first. Use the tools creatively.`;
+- Never say you "can't" do something without trying first. Use the tools creatively.
+
+STYLE-BASED REQUESTS - "In the style of X" or "like X director":
+- When user asks for something "in the style of Wes Anderson" or "like Tarantino", they want movies with SIMILAR AESTHETICS but by DIFFERENT directors
+- Do NOT recommend movies by that director - they already know those exist
+- Instead, search for movies with similar genres, themes, or visual styles by other filmmakers
+- Examples: "Like Wes Anderson" → quirky comedies, coming-of-age dramas with distinctive visual style (Jean-Pierre Jeunet, Michel Gondry, Noah Baumbach)
+- Examples: "Like Tarantino" → crime dramas, neo-noir, stylized violence (Guy Ritchie, Nicolas Winding Refn, the Coen Brothers)`;
 
     // Build messages for API
     const apiMessages: Anthropic.MessageParam[] = messages.map((m: Message) => ({
