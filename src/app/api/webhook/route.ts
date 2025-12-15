@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import { invalidateCache, warmupCache } from "@/lib/plex";
 
+// Debug logging - only in development
+const DEBUG = process.env.NODE_ENV === "development";
+
 // Store for recent events (in production, use Redis or similar)
 const recentEvents: { type: string; title: string; timestamp: number }[] = [];
 const MAX_EVENTS = 20;
@@ -45,12 +48,12 @@ export async function POST(request: NextRequest) {
 
     // Invalidate and refresh cache when library content changes
     if (LIBRARY_CHANGE_EVENTS.includes(event)) {
-      console.log(`[Plex Webhook] Library change detected: ${event}`);
+      if (DEBUG) console.log(`[Plex Webhook] Library change detected: ${event}`);
       invalidateCache();
       warmupCache().catch(console.error);
     }
 
-    console.log(`Plex webhook: ${event} - ${eventData.title}`);
+    if (DEBUG) console.log(`[Plex Webhook] ${event} - ${eventData.title}`);
 
     return Response.json({ ok: true });
   } catch (error) {

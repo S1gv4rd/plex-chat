@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, memo, useCallback } from "react";
+import { shuffle } from "@/lib/utils";
 
 interface SuggestedQuestionsProps {
   onSelect: (question: string) => void;
@@ -58,15 +59,6 @@ const defaultSuggestions = [
   "Most watched genres",
 ];
 
-function shuffle<T>(array: T[]): T[] {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
   // Start with first 4 items (deterministic for SSR), then shuffle on client
   const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 4));
@@ -96,6 +88,7 @@ const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: Sugges
       <button
         onClick={refresh}
         className="text-[11px] text-foreground/30 hover:text-foreground/60 transition-colors flex items-center gap-1 group"
+        aria-label="Show more suggestions"
       >
         <svg className="w-3 h-3 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

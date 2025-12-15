@@ -1,7 +1,21 @@
 // Plex API client with caching and optimized fetching
 
+import { shuffle } from "./utils";
+
 let PLEX_URL = process.env.PLEX_URL;
 let PLEX_TOKEN = process.env.PLEX_TOKEN;
+
+// Consistent error logging helper
+function logPlexError(context: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[Plex API] ${context}: ${message}`);
+}
+
+// Debug logging - only in development
+const DEBUG = process.env.NODE_ENV === "development";
+function logDebug(message: string): void {
+  if (DEBUG) console.log(message);
+}
 
 // Allow setting custom credentials at runtime
 export function setCustomCredentials(url?: string, token?: string): void {
@@ -130,15 +144,6 @@ async function getShowLibraries(): Promise<PlexLibrary[]> {
   return libraries.filter(lib => lib.type === "show");
 }
 
-// Shared Fisher-Yates shuffle utility
-function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
 
 function parseMediaItems(items: any[]): PlexMediaItem[] {
   if (!items) return [];
@@ -176,11 +181,16 @@ export async function searchByPerson(name: string): Promise<{ movies: PlexMediaI
   const fetches = libraries.flatMap(lib => {
     if (lib.type === "movie") {
       return [
-        plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`).catch(() => null),
-        plexFetch(`/library/sections/${lib.key}/all?director=${encodeURIComponent(name)}`).catch(() => null),
+        plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`)
+          .catch((e) => { logPlexError(`searchByPerson actor in ${lib.title}`, e); return null; }),
+        plexFetch(`/library/sections/${lib.key}/all?director=${encodeURIComponent(name)}`)
+          .catch((e) => { logPlexError(`searchByPerson director in ${lib.title}`, e); return null; }),
       ];
     } else if (lib.type === "show") {
-      return [plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`).catch(() => null)];
+      return [
+        plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(name)}`)
+          .catch((e) => { logPlexError(`searchByPerson actor (shows) in ${lib.title}`, e); return null; }),
+      ];
     }
     return [];
   });
@@ -220,7 +230,8 @@ export async function getUnwatchedMovies(count = 20, genre?: string): Promise<Pl
     const endpoint = genre
       ? `/library/sections/${lib.key}/unwatched?genre=${encodeURIComponent(genre)}`
       : `/library/sections/${lib.key}/unwatched`;
-    return plexFetch(endpoint).catch(() => null);
+    return plexFetch(endpoint)
+      .catch((e) => { logPlexError(`getUnwatchedMovies in ${lib.title}`, e); return null; });
   });
 
   const responses = await Promise.all(fetches);
@@ -232,13 +243,7 @@ export async function getUnwatchedMovies(count = 20, genre?: string): Promise<Pl
     }
   }
 
-  // Fisher-Yates shuffle for better randomness
-  for (let i = unwatched.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [unwatched[i], unwatched[j]] = [unwatched[j], unwatched[i]];
-  }
-
-  return unwatched.slice(0, count);
+  return shuffle(unwatched).slice(0, count);
 }
 
 export async function getUnwatchedShows(count = 10, genre?: string): Promise<PlexMediaItem[]> {
@@ -249,7 +254,8 @@ export async function getUnwatchedShows(count = 10, genre?: string): Promise<Ple
     const endpoint = genre
       ? `/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`
       : `/library/sections/${lib.key}/all`;
-    return plexFetch(endpoint).catch(() => null);
+    return plexFetch(endpoint)
+      .catch((e) => { logPlexError(`getUnwatchedShows in ${lib.title}`, e); return null; });
   });
 
   const responses = await Promise.all(fetches);
@@ -261,13 +267,7 @@ export async function getUnwatchedShows(count = 10, genre?: string): Promise<Ple
     }
   }
 
-  // Fisher-Yates shuffle
-  for (let i = shows.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shows[i], shows[j]] = [shows[j], shows[i]];
-  }
-
-  return shows.slice(0, count);
+  return shuffle(shows).slice(0, count);
 }
 
 export async function searchByGenre(genre: string, type: "movie" | "show" = "movie"): Promise<PlexMediaItem[]> {
@@ -275,7 +275,8 @@ export async function searchByGenre(genre: string, type: "movie" | "show" = "mov
   const filteredLibraries = libraries.filter(lib => lib.type === type);
 
   const fetches = filteredLibraries.map(lib =>
-    plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`).catch(() => null)
+    plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`)
+      .catch((e) => { logPlexError(`searchByGenre in ${lib.title}`, e); return null; })
   );
 
   const responses = await Promise.all(fetches);
@@ -299,7 +300,8 @@ export async function getWatchHistory(limit = 20): Promise<PlexMediaItem[]> {
       const endpoint = lib.type === "movie"
         ? `/library/sections/${lib.key}/all?viewCount>=1&sort=lastViewedAt:desc&X-Plex-Container-Size=${limit}`
         : `/library/sections/${lib.key}/all?type=4&viewCount>=1&sort=lastViewedAt:desc&X-Plex-Container-Size=${limit}`;
-      return plexFetch(endpoint).catch(() => null);
+      return plexFetch(endpoint)
+        .catch((e) => { logPlexError(`getWatchHistory in ${lib.title}`, e); return null; });
     });
 
   const responses = await Promise.all(fetches);
@@ -328,7 +330,8 @@ export async function getWatchStats(): Promise<{
   const movieLibraries = libraries.filter(lib => lib.type === "movie");
 
   const fetches = movieLibraries.map(lib =>
-    plexFetch(`/library/sections/${lib.key}/all?viewCount>=1`).catch(() => null)
+    plexFetch(`/library/sections/${lib.key}/all?viewCount>=1`)
+      .catch((e) => { logPlexError(`getWatchStats in ${lib.title}`, e); return null; })
   );
 
   const responses = await Promise.all(fetches);
@@ -380,7 +383,8 @@ export async function getWatchlist(): Promise<PlexMediaItem[]> {
   const movieLibraries = libraries.filter(lib => lib.type === "movie");
 
   const fetches = movieLibraries.map(lib =>
-    plexFetch(`/library/sections/${lib.key}/all?unwatched=1&sort=addedAt:desc&X-Plex-Container-Size=30`).catch(() => null)
+    plexFetch(`/library/sections/${lib.key}/all?unwatched=1&sort=addedAt:desc&X-Plex-Container-Size=30`)
+      .catch((e) => { logPlexError(`getWatchlist in ${lib.title}`, e); return null; })
   );
 
   const responses = await Promise.all(fetches);
@@ -404,20 +408,24 @@ export async function getLibrarySummary(): Promise<PlexLibrarySummary> {
 
   // Parallel fetch all library counts + recently added + on deck
   const countFetches = libraries.map(lib =>
-    plexFetch(`/library/sections/${lib.key}/all?X-Plex-Container-Size=0`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null)
+    plexFetch(`/library/sections/${lib.key}/all?X-Plex-Container-Size=0`, CACHE_TTL.LIBRARY_CONTENT)
+      .catch((e) => { logPlexError(`getLibrarySummary count for ${lib.title}`, e); return null; })
   );
 
   const episodeFetches = libraries
     .filter(lib => lib.type === "show")
     .map(lib =>
-      plexFetch(`/library/sections/${lib.key}/all?type=4&X-Plex-Container-Size=0`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null)
+      plexFetch(`/library/sections/${lib.key}/all?type=4&X-Plex-Container-Size=0`, CACHE_TTL.LIBRARY_CONTENT)
+        .catch((e) => { logPlexError(`getLibrarySummary episodes for ${lib.title}`, e); return null; })
     );
 
   const [countResponses, episodeResponses, recentData, onDeckData] = await Promise.all([
     Promise.all(countFetches),
     Promise.all(episodeFetches),
-    plexFetch("/library/recentlyAdded?X-Plex-Container-Size=10", CACHE_TTL.RECENT).catch(() => null),
-    plexFetch("/library/onDeck", CACHE_TTL.RECENT).catch(() => null),
+    plexFetch("/library/recentlyAdded?X-Plex-Container-Size=10", CACHE_TTL.RECENT)
+      .catch((e) => { logPlexError("getLibrarySummary recentlyAdded", e); return null; }),
+    plexFetch("/library/onDeck", CACHE_TTL.RECENT)
+      .catch((e) => { logPlexError("getLibrarySummary onDeck", e); return null; }),
   ]);
 
   let totalMovies = 0;
@@ -493,23 +501,25 @@ export async function warmupCache(): Promise<void> {
 
   warmupPromise = (async () => {
     try {
-      console.log("[Plex Cache] Starting cache warmup...");
+      logDebug("[Plex Cache] Starting cache warmup...");
       const startTime = Date.now();
 
       // 1. Fetch libraries first (needed for other calls)
       const libraries = await getLibraries();
-      console.log(`[Plex Cache] Loaded ${libraries.length} libraries`);
+      logDebug(`[Plex Cache] Loaded ${libraries.length} libraries`);
 
       // 2. Pre-fetch library summary (counts, recent, on deck)
       const summary = await getLibrarySummary();
-      console.log(`[Plex Cache] Summary: ${summary.totalMovies} movies, ${summary.totalShows} shows`);
+      logDebug(`[Plex Cache] Summary: ${summary.totalMovies} movies, ${summary.totalShows} shows`);
 
       // 3. Pre-fetch all library content in parallel (for faster searches)
       const contentFetches = libraries.flatMap(lib => {
         if (lib.type === "movie" || lib.type === "show") {
           return [
-            plexFetch(`/library/sections/${lib.key}/all`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null),
-            plexFetch(`/library/sections/${lib.key}/collections`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null),
+            plexFetch(`/library/sections/${lib.key}/all`, CACHE_TTL.LIBRARY_CONTENT)
+              .catch((e) => { logPlexError(`warmupCache content for ${lib.title}`, e); return null; }),
+            plexFetch(`/library/sections/${lib.key}/collections`, CACHE_TTL.LIBRARY_CONTENT)
+              .catch((e) => { logPlexError(`warmupCache collections for ${lib.title}`, e); return null; }),
           ];
         }
         return [];
@@ -519,7 +529,7 @@ export async function warmupCache(): Promise<void> {
 
       cacheWarmedUp = true;
       const elapsed = Date.now() - startTime;
-      console.log(`[Plex Cache] Warmup complete in ${elapsed}ms`);
+      logDebug(`[Plex Cache] Warmup complete in ${elapsed}ms`);
     } catch (error) {
       console.error("[Plex Cache] Warmup failed:", error);
     } finally {
@@ -540,7 +550,7 @@ export function invalidateCache(): void {
   cache.clear();
   librariesCache = null;
   cacheWarmedUp = false;
-  console.log("[Plex Cache] Cache invalidated");
+  logDebug("[Plex Cache] Cache invalidated");
 }
 
 // Check if two titles are from the same franchise (sequels, prequels, etc.)
@@ -618,7 +628,7 @@ export async function getSimilarMovies(title: string, count = 5): Promise<PlexMe
                 }
               }
             })
-            .catch(() => {})
+            .catch((e) => { logPlexError(`getSimilarMovies genre ${genre} in ${lib.title}`, e); })
         );
       }
     }
@@ -637,7 +647,7 @@ export async function getSimilarMovies(title: string, count = 5): Promise<PlexMe
               }
             }
           })
-          .catch(() => {})
+          .catch((e) => { logPlexError(`getSimilarMovies director ${director} in ${lib.title}`, e); })
       );
     }
   }
@@ -655,7 +665,7 @@ export async function getSimilarMovies(title: string, count = 5): Promise<PlexMe
               }
             }
           })
-          .catch(() => {})
+          .catch((e) => { logPlexError(`getSimilarMovies actor ${actor} in ${lib.title}`, e); })
       );
     }
   }
@@ -671,7 +681,21 @@ export async function getSimilarMovies(title: string, count = 5): Promise<PlexMe
     })
     .map(c => c.item);
 
-  return sorted.slice(0, count);
+  // Enforce max 1 movie per director for variety
+  const seenDirectors = new Set<string>();
+  const sourceDirector = movie.directors?.[0]?.toLowerCase();
+  if (sourceDirector) seenDirectors.add(sourceDirector); // Exclude source movie's director too
+
+  const diverse: PlexMediaItem[] = [];
+  for (const item of sorted) {
+    const director = item.directors?.[0]?.toLowerCase();
+    if (director && seenDirectors.has(director)) continue;
+    if (director) seenDirectors.add(director);
+    diverse.push(item);
+    if (diverse.length >= count) break;
+  }
+
+  return diverse;
 }
 
 // Get collections
@@ -680,7 +704,8 @@ export async function getCollections(): Promise<{ key: string; title: string; co
   const collections: { key: string; title: string; count: number }[] = [];
 
   const fetches = libraries.map(lib =>
-    plexFetch(`/library/sections/${lib.key}/collections`).catch(() => null)
+    plexFetch(`/library/sections/${lib.key}/collections`)
+      .catch((e) => { logPlexError(`getCollections in ${lib.title}`, e); return null; })
   );
 
   const responses = await Promise.all(fetches);
@@ -715,7 +740,9 @@ export async function getCollectionItems(collectionTitle: string): Promise<PlexM
         const itemsData = await plexFetch(`/library/collections/${collection.ratingKey}/children`);
         return parseMediaItems(itemsData?.MediaContainer?.Metadata);
       }
-    } catch {}
+    } catch (e) {
+      logPlexError(`getCollectionItems for "${collectionTitle}" in ${lib.title}`, e);
+    }
   }
 
   return [];
@@ -847,7 +874,8 @@ export async function pickRandomMovie(unwatchedOnly = true, genre?: string): Pro
       endpoint += "?" + params.join("&");
     }
 
-    const data = await plexFetch(endpoint, CACHE_TTL.LIBRARY_CONTENT).catch(() => null);
+    const data = await plexFetch(endpoint, CACHE_TTL.LIBRARY_CONTENT)
+      .catch((e) => { logPlexError(`pickRandomMovie in ${lib.title}`, e); return null; });
     if (data?.MediaContainer?.Metadata) {
       allMovies.push(...parseMediaItems(data.MediaContainer.Metadata));
     }

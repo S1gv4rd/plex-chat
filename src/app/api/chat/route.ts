@@ -1,57 +1,87 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails, pickRandomMovie, setCustomCredentials } from "@/lib/plex";
+import { shuffle } from "@/lib/utils";
 import { NextRequest } from "next/server";
 
-// Web search using DuckDuckGo HTML
+// Web search using DuckDuckGo HTML with robust fallback parsing
 async function webSearch(query: string, maxResults: number = 5): Promise<string> {
-  try {
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-      },
-    });
-
-    if (!response.ok) {
-      return "Search failed - could not connect to search service.";
-    }
-
-    const html = await response.text();
-
-    // Parse results from DuckDuckGo HTML
-    const results: { title: string; snippet: string; url: string }[] = [];
-    const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([^<]*)/g;
-
-    let match;
-    while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
-      const url = match[1];
-      const title = match[2].trim();
-      const snippet = match[3].trim();
-      if (title && snippet) {
-        results.push({ title, url, snippet });
+  const parseStrategies = [
+    // Strategy 1: Standard DuckDuckGo result structure
+    (html: string) => {
+      const results: { title: string; snippet: string; url: string }[] = [];
+      const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([^<]*)/g;
+      let match;
+      while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
+        const url = match[1];
+        const title = match[2].trim();
+        const snippet = match[3].trim();
+        if (title && snippet) results.push({ title, url, snippet });
       }
-    }
-
-    // Fallback: simpler parsing if regex didn't work
-    if (results.length === 0) {
+      return results;
+    },
+    // Strategy 2: Simpler class-based parsing
+    (html: string) => {
+      const results: { title: string; snippet: string; url: string }[] = [];
       const titleMatches = html.match(/<a[^>]*class="result__a"[^>]*>([^<]+)<\/a>/g) || [];
       const snippetMatches = html.match(/<a[^>]*class="result__snippet"[^>]*>([^<]+)/g) || [];
-
       for (let i = 0; i < Math.min(titleMatches.length, snippetMatches.length, maxResults); i++) {
         const titleMatch = titleMatches[i].match(/>([^<]+)<\/a>/);
         const snippetMatch = snippetMatches[i].match(/>([^<]+)/);
         if (titleMatch && snippetMatch) {
-          results.push({
-            title: titleMatch[1].trim(),
-            snippet: snippetMatch[1].trim(),
-            url: "",
-          });
+          results.push({ title: titleMatch[1].trim(), snippet: snippetMatch[1].trim(), url: "" });
         }
       }
+      return results;
+    },
+    // Strategy 3: Generic link + text extraction (fallback)
+    (html: string) => {
+      const results: { title: string; snippet: string; url: string }[] = [];
+      // Look for any structured result blocks
+      const blockRegex = /<div[^>]*class="[^"]*result[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+      let blockMatch;
+      while ((blockMatch = blockRegex.exec(html)) !== null && results.length < maxResults) {
+        const block = blockMatch[1];
+        const linkMatch = block.match(/<a[^>]*href="([^"]*)"[^>]*>([^<]+)<\/a>/);
+        const textMatch = block.match(/<[^>]*class="[^"]*snippet[^"]*"[^>]*>([^<]+)/i) ||
+                          block.match(/<p[^>]*>([^<]{20,})</);
+        if (linkMatch && textMatch) {
+          results.push({ url: linkMatch[1], title: linkMatch[2].trim(), snippet: textMatch[1].trim() });
+        }
+      }
+      return results;
+    },
+  ];
+
+  try {
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+      },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+
+    if (!response.ok) {
+      console.error(`[WebSearch] DuckDuckGo returned status ${response.status}`);
+      return `Search temporarily unavailable (status ${response.status}). Try again in a moment.`;
+    }
+
+    const html = await response.text();
+
+    // Try each parsing strategy until one works
+    let results: { title: string; snippet: string; url: string }[] = [];
+    for (const strategy of parseStrategies) {
+      results = strategy(html);
+      if (results.length > 0) break;
     }
 
     if (results.length === 0) {
-      return "No search results found.";
+      // Log for debugging - HTML structure may have changed
+      console.error("[WebSearch] All parsing strategies failed. HTML structure may have changed.");
+      console.error("[WebSearch] HTML sample:", html.substring(0, 500));
+      return `Search completed but couldn't parse results. The search service format may have changed.`;
     }
 
     let response_text = `Web search results for "${query}":\n\n`;
@@ -60,55 +90,102 @@ async function webSearch(query: string, maxResults: number = 5): Promise<string>
     }
     return response_text;
   } catch (error) {
-    console.error("Web search error:", error);
-    return "Search failed - an error occurred while searching.";
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[WebSearch] Error:", message);
+
+    if (message.includes("timeout") || message.includes("abort")) {
+      return "Search timed out. The search service may be slow - try again.";
+    }
+    if (message.includes("fetch")) {
+      return "Could not connect to search service. Check your internet connection.";
+    }
+    return `Search failed: ${message}`;
   }
 }
 
-// Letterboxd rating scraper
+// Letterboxd rating scraper with multiple parsing strategies
 async function getLetterboxdRating(title: string, year?: string): Promise<{ rating: string; url: string } | null> {
-  try {
-    // Convert title to Letterboxd slug format
-    let slug = title
+  // Generate slug with better handling of special characters
+  const generateSlug = (t: string): string => {
+    return t
       .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
       .replace(/['']/g, "")
       .replace(/&/g, "and")
       .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+      .replace(/^-+|-+$/g, "")
+      .replace(/-+/g, "-"); // Collapse multiple dashes
+  };
 
-    // Try with year suffix for disambiguation
-    const urls = year
-      ? [`https://letterboxd.com/film/${slug}-${year}/`, `https://letterboxd.com/film/${slug}/`]
-      : [`https://letterboxd.com/film/${slug}/`];
+  const slug = generateSlug(title);
 
-    for (const url of urls) {
+  // Try multiple URL patterns
+  const urls = [
+    year ? `https://letterboxd.com/film/${slug}-${year}/` : null,
+    `https://letterboxd.com/film/${slug}/`,
+    // Try without "the" prefix
+    slug.startsWith("the-") ? `https://letterboxd.com/film/${slug.slice(4)}/` : null,
+  ].filter(Boolean) as string[];
+
+  // Multiple strategies for finding the rating
+  const ratingPatterns = [
+    /itemprop="ratingValue"[^>]*>([0-9.]+)</i,
+    /content="([0-9.]+)"[^>]*itemprop="ratingValue"/i,
+    /"ratingValue":\s*"?([0-9.]+)"?/i,
+    /class="average-rating"[^>]*>([0-9.]+)/i,
+    /data-average-rating="([0-9.]+)"/i,
+    /"aggregateRating"[^}]*"ratingValue":\s*"?([0-9.]+)"?/i,
+  ];
+
+  for (const url of urls) {
+    try {
       const response = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
+        signal: AbortSignal.timeout(8000), // 8 second timeout
       });
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        if (response.status === 404) continue; // Try next URL
+        console.error(`[Letterboxd] Status ${response.status} for ${url}`);
+        continue;
+      }
 
       const html = await response.text();
 
-      // Look for the rating in the page
-      // Letterboxd shows rating as "X.XX out of 5" or in meta tags
-      const ratingMatch = html.match(/itemprop="ratingValue"[^>]*>([0-9.]+)</i) ||
-                          html.match(/content="([0-9.]+)"[^>]*itemprop="ratingValue"/i) ||
-                          html.match(/"ratingValue":\s*"?([0-9.]+)"?/i);
-
-      if (ratingMatch) {
-        const rating = parseFloat(ratingMatch[1]);
-        return { rating: `${rating.toFixed(1)}/5`, url };
+      // Try each rating pattern
+      for (const pattern of ratingPatterns) {
+        const match = html.match(pattern);
+        if (match) {
+          const rating = parseFloat(match[1]);
+          if (rating > 0 && rating <= 5) {
+            return { rating: `${rating.toFixed(1)}/5`, url };
+          }
+        }
       }
-    }
 
-    return null;
-  } catch (error) {
-    console.error("Letterboxd lookup error:", error);
-    return null;
+      // If we got HTML but no rating, the movie exists but might not have enough ratings
+      if (html.includes('class="film-poster"') || html.includes('data-film-slug')) {
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Letterboxd] Found film "${title}" but no rating available yet`);
+        }
+        return null;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("timeout")) {
+        console.error(`[Letterboxd] Timeout fetching ${url}`);
+      } else {
+        console.error(`[Letterboxd] Error fetching ${url}:`, message);
+      }
+      // Continue to next URL
+    }
   }
+
+  return null;
 }
 
 // OMDB API for movie details (optional - requires free API key)
@@ -514,7 +591,7 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     if (results.length === 0) {
       return `No ${type}s found in the ${toolInput.genre} genre.`;
     }
-    const shuffled = results.sort(() => Math.random() - 0.5).slice(0, 12);
+    const shuffled = shuffle(results).slice(0, 12);
     let response = `Found ${results.length} ${type}s in ${toolInput.genre}. Here are some:\n`;
     for (const item of shuffled) {
       const watched = item.viewCount ? " [WATCHED]" : "";

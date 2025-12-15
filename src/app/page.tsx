@@ -5,7 +5,7 @@ import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import LibraryStats from "@/components/LibraryStats";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
-import Settings, { getSettings } from "@/components/Settings";
+import Settings, { getSettingsAsync } from "@/components/Settings";
 import { PlexLibrarySummary } from "@/lib/plex";
 
 interface Message {
@@ -64,24 +64,28 @@ export default function Home() {
     }
   }, [messages, historyLoaded]);
 
-  const fetchLibrary = useCallback(() => {
-    const settings = getSettings();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const fetchLibrary = useCallback(async () => {
+    try {
+      const settings = await getSettingsAsync();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-    fetch("/api/library", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        plexUrl: settings.plexUrl || undefined,
-        plexToken: settings.plexToken || undefined,
-      }),
-    })
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => {
-        setLibrarySummary(data);
-        setLibraryError(null);
-      })
-      .catch(() => setLibraryError("Could not connect to Plex server."));
+      const res = await fetch("/api/library", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          plexUrl: settings.plexUrl || undefined,
+          plexToken: settings.plexToken || undefined,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch library");
+
+      const data = await res.json();
+      setLibrarySummary(data);
+      setLibraryError(null);
+    } catch {
+      setLibraryError("Could not connect to Plex server.");
+    }
   }, []);
 
   useEffect(() => {
@@ -103,7 +107,7 @@ export default function Home() {
     setLoadingStatus(null);
 
     try {
-      const settings = getSettings();
+      const settings = await getSettingsAsync();
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,7 +188,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-background">
+    <div className="app-height flex flex-col bg-background">
       {/* Offline indicator */}
       {libraryError && (
         <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2 safe-top">
@@ -203,9 +207,9 @@ export default function Home() {
         </div>
       )}
 
-      <header className="px-4 py-3 safe-top shrink-0">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <button onClick={resetChat} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+      <header className="px-4 py-3 safe-top shrink-0 overflow-visible">
+        <div className="max-w-2xl mx-auto flex items-center justify-between overflow-visible">
+          <button onClick={resetChat} className="flex items-center gap-2.5 hover:opacity-80 transition-opacity" aria-label="Start new chat">
             <div className="w-8 h-8 bg-plex-orange rounded-lg flex items-center justify-center">
               <svg className="w-4 h-4 text-black" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
@@ -213,19 +217,21 @@ export default function Home() {
             </div>
             <span className="text-base font-medium text-foreground">Plex Chat</span>
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => sendMessage("Spin the wheel!")}
               disabled={isLoading || !!libraryError}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 border-2 border-white/10 hover:border-plex-orange transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg"
               title="Random movie picker"
+              aria-label="Pick a random movie"
             >
               🎲
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 border-2 border-white/10 hover:border-plex-orange transition-all text-foreground/60 hover:text-foreground"
               title="Settings"
+              aria-label="Open settings"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -264,7 +270,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="p-4 safe-bottom shrink-0">
+        <div className="px-4 pt-2 pb-4 shrink-0" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
           <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
             <div className="flex-1 relative">
               <textarea

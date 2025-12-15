@@ -27,11 +27,21 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   min-height: 100vh;
-  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
   overscroll-behavior: none;
+}
+
+html {
+  height: -webkit-fill-available;
+}
+
+/* PWA full height container */
+.app-height {
+  height: 100vh;
+  height: -webkit-fill-available;
 }
 
 /* Prevent zoom on input focus (iOS) */
