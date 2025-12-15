@@ -537,12 +537,13 @@ Guidelines:
 - IMPORTANT: Always try to use tools and give actual results. Don't just list options or ask clarifying questions - make your best attempt to find what the user is looking for. For vague queries like "book adaptations", search by genre (Drama, Fantasy) or search for well-known adaptations.
 - Never say you "can't" do something without trying first. Use the tools creatively.
 
-STYLE-BASED REQUESTS - "In the style of X" or "like X director":
-- When user asks for something "in the style of Wes Anderson" or "like Tarantino", they want movies with SIMILAR AESTHETICS but by DIFFERENT directors
-- Do NOT recommend movies by that director - they already know those exist
-- Instead, search for movies with similar genres, themes, or visual styles by other filmmakers
-- Examples: "Like Wes Anderson" → quirky comedies, coming-of-age dramas with distinctive visual style (Jean-Pierre Jeunet, Michel Gondry, Noah Baumbach)
-- Examples: "Like Tarantino" → crime dramas, neo-noir, stylized violence (Guy Ritchie, Nicolas Winding Refn, the Coen Brothers)`;
+STYLE-BASED AND SIMILAR MOVIE REQUESTS:
+- "In the style of [director]" or "like [director]" → movies with SIMILAR AESTHETICS but by DIFFERENT directors. Do NOT recommend that director's films.
+- "Movies like [specific movie]" or "similar to [movie]" → prioritize films by DIFFERENT directors. The user already knows the director's other work.
+- Only include 1 film max by the same director, and only if it's exceptionally relevant
+- Example: "Like Interstellar" → recommend Arrival, 2001, Contact, Gravity - NOT Inception, Tenet, The Prestige
+- Example: "Like Wes Anderson" → Jean-Pierre Jeunet, Michel Gondry, Noah Baumbach films
+- Example: "Like Tarantino" → Guy Ritchie, Coen Brothers, Nicolas Winding Refn films`;
 
     // Build messages for API
     const apiMessages: Anthropic.MessageParam[] = messages.map((m: Message) => ({
