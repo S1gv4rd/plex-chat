@@ -202,23 +202,6 @@ const tools: Anthropic.Tool[] = [
   }
 ];
 
-// Tool display names for status messages
-const toolStatusMessages: Record<string, string> = {
-  search_by_person: "Searching by actor/director...",
-  search_library: "Searching your library...",
-  get_recommendations: "Finding recommendations...",
-  get_tv_recommendations: "Finding TV shows...",
-  search_by_genre: "Browsing by genre...",
-  get_watch_history: "Loading watch history...",
-  get_watch_stats: "Calculating your stats...",
-  get_watchlist: "Loading watchlist...",
-  get_similar_movies: "Finding similar movies...",
-  get_collections: "Loading collections...",
-  get_collection_items: "Loading collection...",
-  get_media_details: "Getting details...",
-  random_movie_picker: "Spinning the wheel...",
-};
-
 // Process tool calls
 async function processToolCall(toolName: string, toolInput: Record<string, string | number>): Promise<string> {
   if (toolName === "search_by_person") {
@@ -574,10 +557,8 @@ STYLE-BASED AND SIMILAR MOVIE REQUESTS:
 
             if (toolUseBlocks.length === 0) break;
 
-            // Send status message for the tools being used
-            const toolNames = toolUseBlocks.map(t => t.name);
-            const statusMessage = toolStatusMessages[toolNames[0]] || "Searching...";
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: statusMessage })}\n\n`));
+            // Show loading dots (no text)
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
 
             // Process all tool calls
             const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
