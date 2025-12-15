@@ -1,8 +1,16 @@
 import { NextRequest } from "next/server";
+import { invalidateCache, warmupCache } from "@/lib/plex";
 
 // Store for recent events (in production, use Redis or similar)
 const recentEvents: { type: string; title: string; timestamp: number }[] = [];
 const MAX_EVENTS = 20;
+
+// Events that should trigger cache invalidation
+const LIBRARY_CHANGE_EVENTS = [
+  "library.new",
+  "library.on.deck",
+  "media.scrobble",
+];
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,6 +41,13 @@ export async function POST(request: NextRequest) {
     recentEvents.unshift(eventData);
     if (recentEvents.length > MAX_EVENTS) {
       recentEvents.pop();
+    }
+
+    // Invalidate and refresh cache when library content changes
+    if (LIBRARY_CHANGE_EVENTS.includes(event)) {
+      console.log(`[Plex Webhook] Library change detected: ${event}`);
+      invalidateCache();
+      warmupCache().catch(console.error);
     }
 
     console.log(`Plex webhook: ${event} - ${eventData.title}`);

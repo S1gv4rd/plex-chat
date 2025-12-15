@@ -3,9 +3,20 @@
 const PLEX_URL = process.env.PLEX_URL;
 const PLEX_TOKEN = process.env.PLEX_TOKEN;
 
+// Cache TTLs (in milliseconds)
+const CACHE_TTL = {
+  DEFAULT: 5 * 60 * 1000,        // 5 minutes for general API calls
+  LIBRARIES: 30 * 60 * 1000,     // 30 minutes for library structure
+  LIBRARY_CONTENT: 10 * 60 * 1000, // 10 minutes for library content (movies/shows)
+  RECENT: 2 * 60 * 1000,         // 2 minutes for recently added/on deck
+};
+
 // Simple in-memory cache with TTL
 const cache = new Map<string, { data: any; expires: number }>();
-const CACHE_TTL = 60 * 1000; // 1 minute cache
+
+// Cache warmup state
+let cacheWarmedUp = false;
+let warmupPromise: Promise<void> | null = null;
 
 interface PlexMediaItem {
   ratingKey: string;
@@ -51,11 +62,11 @@ function getCached<T>(key: string): T | null {
   return null;
 }
 
-function setCache(key: string, data: any, ttl = CACHE_TTL): void {
+function setCache(key: string, data: any, ttl = CACHE_TTL.DEFAULT): void {
   cache.set(key, { data, expires: Date.now() + ttl });
 }
 
-async function plexFetch(endpoint: string): Promise<any> {
+async function plexFetch(endpoint: string, ttl = CACHE_TTL.DEFAULT): Promise<any> {
   if (!PLEX_URL || !PLEX_TOKEN) {
     throw new Error("Plex URL and Token must be configured");
   }
@@ -76,7 +87,7 @@ async function plexFetch(endpoint: string): Promise<any> {
   }
 
   const data = await response.json();
-  setCache(cacheKey, data);
+  setCache(cacheKey, data, ttl);
   return data;
 }
 
@@ -88,14 +99,14 @@ async function getLibraries(): Promise<PlexLibrary[]> {
     return librariesCache.data;
   }
 
-  const data = await plexFetch("/library/sections");
+  const data = await plexFetch("/library/sections", CACHE_TTL.LIBRARIES);
   const libraries = data.MediaContainer.Directory.map((lib: any) => ({
     key: lib.key,
     title: lib.title,
     type: lib.type,
   }));
 
-  librariesCache = { data: libraries, expires: Date.now() + 5 * 60 * 1000 }; // 5 min cache
+  librariesCache = { data: libraries, expires: Date.now() + CACHE_TTL.LIBRARIES };
   return libraries;
 }
 
@@ -363,20 +374,20 @@ export async function getLibrarySummary(): Promise<PlexLibrarySummary> {
 
   // Parallel fetch all library counts + recently added + on deck
   const countFetches = libraries.map(lib =>
-    plexFetch(`/library/sections/${lib.key}/all?X-Plex-Container-Size=0`).catch(() => null)
+    plexFetch(`/library/sections/${lib.key}/all?X-Plex-Container-Size=0`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null)
   );
 
   const episodeFetches = libraries
     .filter(lib => lib.type === "show")
     .map(lib =>
-      plexFetch(`/library/sections/${lib.key}/all?type=4&X-Plex-Container-Size=0`).catch(() => null)
+      plexFetch(`/library/sections/${lib.key}/all?type=4&X-Plex-Container-Size=0`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null)
     );
 
   const [countResponses, episodeResponses, recentData, onDeckData] = await Promise.all([
     Promise.all(countFetches),
     Promise.all(episodeFetches),
-    plexFetch("/library/recentlyAdded?X-Plex-Container-Size=10").catch(() => null),
-    plexFetch("/library/onDeck").catch(() => null),
+    plexFetch("/library/recentlyAdded?X-Plex-Container-Size=10", CACHE_TTL.RECENT).catch(() => null),
+    plexFetch("/library/onDeck", CACHE_TTL.RECENT).catch(() => null),
   ]);
 
   let totalMovies = 0;
@@ -437,6 +448,69 @@ export async function getLibraryContext(): Promise<string> {
   context += `\nUse search tools for specific queries.`;
 
   return context;
+}
+
+// Pre-fetch and warm up the cache
+export async function warmupCache(): Promise<void> {
+  // Prevent multiple simultaneous warmups
+  if (warmupPromise) {
+    return warmupPromise;
+  }
+
+  if (cacheWarmedUp) {
+    return;
+  }
+
+  warmupPromise = (async () => {
+    try {
+      console.log("[Plex Cache] Starting cache warmup...");
+      const startTime = Date.now();
+
+      // 1. Fetch libraries first (needed for other calls)
+      const libraries = await getLibraries();
+      console.log(`[Plex Cache] Loaded ${libraries.length} libraries`);
+
+      // 2. Pre-fetch library summary (counts, recent, on deck)
+      const summary = await getLibrarySummary();
+      console.log(`[Plex Cache] Summary: ${summary.totalMovies} movies, ${summary.totalShows} shows`);
+
+      // 3. Pre-fetch all library content in parallel (for faster searches)
+      const contentFetches = libraries.flatMap(lib => {
+        if (lib.type === "movie" || lib.type === "show") {
+          return [
+            plexFetch(`/library/sections/${lib.key}/all`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null),
+            plexFetch(`/library/sections/${lib.key}/collections`, CACHE_TTL.LIBRARY_CONTENT).catch(() => null),
+          ];
+        }
+        return [];
+      });
+
+      await Promise.all(contentFetches);
+
+      cacheWarmedUp = true;
+      const elapsed = Date.now() - startTime;
+      console.log(`[Plex Cache] Warmup complete in ${elapsed}ms`);
+    } catch (error) {
+      console.error("[Plex Cache] Warmup failed:", error);
+    } finally {
+      warmupPromise = null;
+    }
+  })();
+
+  return warmupPromise;
+}
+
+// Check if cache is warmed up
+export function isCacheWarmedUp(): boolean {
+  return cacheWarmedUp;
+}
+
+// Invalidate cache (useful for webhook triggers)
+export function invalidateCache(): void {
+  cache.clear();
+  librariesCache = null;
+  cacheWarmedUp = false;
+  console.log("[Plex Cache] Cache invalidated");
 }
 
 // Get similar/related movies
