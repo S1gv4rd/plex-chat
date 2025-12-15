@@ -11,7 +11,7 @@ interface FollowUpSuggestionsProps {
 function extractTitles(content: string): string[] {
   const matches = content.match(/\*\*([^*]+)\*\*/g) || [];
 
-  // Words/phrases that are headings, not titles
+  // Words/phrases that are headings or descriptions, not titles
   const excludePatterns = [
     /^tv shows?:?$/i,
     /^movies?:?$/i,
@@ -24,13 +24,31 @@ function extractTitles(content: string): string[] {
     /^summary:?$/i,
     /^details:?$/i,
     /^studio:?$/i,
+    /^search/i,
+    /^browse/i,
+    /^check/i,
+    /^find/i,
+    /^look/i,
+    /^try/i,
+    /^option/i,
+    /^tip/i,
+    /^note/i,
+    /for specific/i,
+    /by genre/i,
+    /by director/i,
+    /or franchise/i,
+    /collections?$/i,
   ];
 
   return matches
     .map(m => m.replace(/\*\*/g, "").split(" (")[0].trim())
     .filter(t => {
       if (t.length === 0 || t.length > 40) return false;
-      return !excludePatterns.some(pattern => pattern.test(t));
+      // Filter out section headings and action phrases
+      if (excludePatterns.some(pattern => pattern.test(t))) return false;
+      // Filter out if it contains common non-title words
+      if (/^(how|what|where|when|why|which|the best|your|my|a |an )/i.test(t)) return false;
+      return true;
     })
     .slice(0, 3);
 }
