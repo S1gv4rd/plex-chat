@@ -486,7 +486,7 @@ IMPORTANT - Always use tools to get accurate information:
 - Use search_by_genre when asking about specific genres like "comedies", "horror movies", "sci-fi" - set type to "show" for TV shows
 - Use search_by_person when asking about actors or directors
 - Use search_library to find specific titles
-- Use get_media_details when the user asks "tell me more about X", "what is X about", "who's in X", or wants detailed info about a specific title
+- Use get_media_details when the user asks "more about X", "tell me more about X", "what is X about", "who's in X", or wants detailed info about a specific title. ALWAYS use this tool - it provides the Rotten Tomatoes rating which MUST be included in your response.
 - Use get_watch_history when asking about their viewing history or what they've watched
 - Use get_watch_stats when asking about viewing statistics, habits, top genres, or most-watched
 - Use get_watchlist when asking about their watchlist or what they plan to watch
