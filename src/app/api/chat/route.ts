@@ -424,7 +424,7 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     response += `\n\n`;
 
     if (details.rating) {
-      response += `Rating: ${Math.round(details.rating * 10)}%\n`;
+      response += `Rotten Tomatoes: ${Math.round(details.rating * 10)}%\n`;
     }
     if (details.genres.length > 0) {
       response += `Genres: ${details.genres.join(", ")}\n`;
