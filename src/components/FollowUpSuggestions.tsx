@@ -125,9 +125,13 @@ function generateFollowUps(lastMessage: string): string[] {
 
   // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
+    // For lists of movies, pick a random one for "More about" (skip first if it's the source movie in similar view)
+    const moreAboutTitles = isSimilarView && titles.length > 1 ? titles.slice(1) : titles;
+    const randomTitle = moreAboutTitles[Math.floor(Math.random() * moreAboutTitles.length)];
+
     // Only offer "More about" if this isn't already a detailed view
-    if (!isDetailedView) {
-      suggestions.push(`More about ${titles[0]}`);
+    if (!isDetailedView && randomTitle) {
+      suggestions.push(`More about ${randomTitle}`);
     }
     // Only offer "Similar to" if this isn't already showing similar movies
     if (!isSimilarView) {
