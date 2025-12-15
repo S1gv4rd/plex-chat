@@ -5,7 +5,6 @@ import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import LibraryStats from "@/components/LibraryStats";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
-import FollowUpSuggestions from "@/components/FollowUpSuggestions";
 import { PlexLibrarySummary } from "@/lib/plex";
 
 interface Message {
@@ -207,13 +206,6 @@ export default function Home() {
               ))}
               {streamingContent && <ChatMessage role="assistant" content={streamingContent} isStreaming />}
               {isLoading && !streamingContent && <TypingIndicator status={loadingStatus || undefined} />}
-              {/* Show follow-up suggestions after last assistant message */}
-              {!isLoading && !streamingContent && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
-                <FollowUpSuggestions
-                  lastMessage={messages[messages.length - 1].content}
-                  onSelect={sendMessage}
-                />
-              )}
               <div ref={messagesEndRef} />
             </>
           )}
