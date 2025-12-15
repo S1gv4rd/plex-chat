@@ -2,6 +2,127 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails, pickRandomMovie, setCustomCredentials } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
+// Web search using DuckDuckGo HTML
+async function webSearch(query: string, maxResults: number = 5): Promise<string> {
+  try {
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      return "Search failed - could not connect to search service.";
+    }
+
+    const html = await response.text();
+
+    // Parse results from DuckDuckGo HTML
+    const results: { title: string; snippet: string; url: string }[] = [];
+    const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([^<]*)/g;
+
+    let match;
+    while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
+      const url = match[1];
+      const title = match[2].trim();
+      const snippet = match[3].trim();
+      if (title && snippet) {
+        results.push({ title, url, snippet });
+      }
+    }
+
+    // Fallback: simpler parsing if regex didn't work
+    if (results.length === 0) {
+      const titleMatches = html.match(/<a[^>]*class="result__a"[^>]*>([^<]+)<\/a>/g) || [];
+      const snippetMatches = html.match(/<a[^>]*class="result__snippet"[^>]*>([^<]+)/g) || [];
+
+      for (let i = 0; i < Math.min(titleMatches.length, snippetMatches.length, maxResults); i++) {
+        const titleMatch = titleMatches[i].match(/>([^<]+)<\/a>/);
+        const snippetMatch = snippetMatches[i].match(/>([^<]+)/);
+        if (titleMatch && snippetMatch) {
+          results.push({
+            title: titleMatch[1].trim(),
+            snippet: snippetMatch[1].trim(),
+            url: "",
+          });
+        }
+      }
+    }
+
+    if (results.length === 0) {
+      return "No search results found.";
+    }
+
+    let response_text = `Web search results for "${query}":\n\n`;
+    for (const result of results) {
+      response_text += `**${result.title}**\n${result.snippet}\n\n`;
+    }
+    return response_text;
+  } catch (error) {
+    console.error("Web search error:", error);
+    return "Search failed - an error occurred while searching.";
+  }
+}
+
+// OMDB API for movie details (optional - requires free API key)
+let omdbApiKey: string | null = null;
+
+export function setOmdbApiKey(key: string | null) {
+  omdbApiKey = key;
+}
+
+async function lookupMovieExternal(title: string, year?: string): Promise<string> {
+  if (!omdbApiKey) {
+    // Fallback to web search if no OMDB key
+    return webSearch(`${title} ${year || ""} movie review rating`);
+  }
+
+  try {
+    const params = new URLSearchParams({
+      apikey: omdbApiKey,
+      t: title,
+      type: "movie",
+    });
+    if (year) params.set("y", year);
+
+    const response = await fetch(`https://www.omdbapi.com/?${params}`);
+    const data = await response.json();
+
+    if (data.Response === "False") {
+      return `Could not find external info for "${title}".`;
+    }
+
+    let result = `**${data.Title}** (${data.Year})\n\n`;
+    if (data.Rated) result += `Rated: ${data.Rated}\n`;
+    if (data.Runtime) result += `Runtime: ${data.Runtime}\n`;
+    if (data.Genre) result += `Genre: ${data.Genre}\n`;
+    if (data.Director) result += `Director: ${data.Director}\n`;
+    if (data.Actors) result += `Cast: ${data.Actors}\n`;
+    result += `\n`;
+    if (data.Plot) result += `**Plot:** ${data.Plot}\n\n`;
+
+    if (data.Ratings && data.Ratings.length > 0) {
+      result += `**Ratings:**\n`;
+      for (const rating of data.Ratings) {
+        result += `- ${rating.Source}: ${rating.Value}\n`;
+      }
+    }
+
+    if (data.Awards && data.Awards !== "N/A") {
+      result += `\n**Awards:** ${data.Awards}\n`;
+    }
+    if (data.BoxOffice && data.BoxOffice !== "N/A") {
+      result += `**Box Office:** ${data.BoxOffice}\n`;
+    }
+
+    return result;
+  } catch (error) {
+    console.error("OMDB lookup error:", error);
+    return webSearch(`${title} ${year || ""} movie information`);
+  }
+}
+
 // Default client using env var
 let anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -206,6 +327,38 @@ const tools: Anthropic.Tool[] = [
         }
       },
       required: []
+    }
+  },
+  {
+    name: "web_search",
+    description: "Search the internet for information. Use this to find movie reviews, actor info, film news, release dates, or any information not in the Plex library. Good for questions about movies the user doesn't have, upcoming releases, industry news, or general entertainment questions.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query"
+        }
+      },
+      required: ["query"]
+    }
+  },
+  {
+    name: "lookup_movie_external",
+    description: "Look up detailed external information about a movie including IMDB/Rotten Tomatoes ratings, box office, awards, and full plot. Use when the user asks about a movie they might not have, wants external ratings, or asks 'is X any good?', 'should I watch X?', or wants more info about a movie not in their library.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: {
+          type: "string",
+          description: "The movie title to look up"
+        },
+        year: {
+          type: "string",
+          description: "Optional release year to help find the correct movie"
+        }
+      },
+      required: ["title"]
     }
   }
 ];
@@ -458,13 +611,20 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     }
 
     return response;
+  } else if (toolName === "web_search") {
+    return await webSearch(toolInput.query as string);
+  } else if (toolName === "lookup_movie_external") {
+    return await lookupMovieExternal(
+      toolInput.title as string,
+      toolInput.year as string | undefined
+    );
   }
   return "Unknown tool";
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages, plexUrl, plexToken, anthropicKey } = await request.json();
+    const { messages, plexUrl, plexToken, anthropicKey, omdbKey } = await request.json();
 
     if (!messages || !Array.isArray(messages)) {
       return Response.json({ error: "Messages are required" }, { status: 400 });
@@ -474,6 +634,9 @@ export async function POST(request: NextRequest) {
     if (plexUrl || plexToken) {
       setCustomCredentials(plexUrl, plexToken);
     }
+
+    // Set OMDB API key if provided
+    setOmdbApiKey(omdbKey || process.env.OMDB_API_KEY || null);
 
     // Get Anthropic client (custom or default)
     const client = getAnthropicClient(anthropicKey);
@@ -540,6 +703,12 @@ Guidelines:
 - IMPORTANT: Always try to use tools and give actual results. Don't just list options or ask clarifying questions - make your best attempt to find what the user is looking for.
 - USE YOUR WORLD KNOWLEDGE: When users ask for thematic content (e.g., "Stasi movies", "films about Wall Street", "movies set in Tokyo"), don't just search for keywords. Use your knowledge of cinema to search for SPECIFIC FAMOUS FILMS about that topic by title. For "Stasi movies", search for "The Lives of Others", "Barbara", "The Spy". For "Wall Street films", search for "Wall Street", "The Big Short", "Margin Call". Always search for the well-known films you know exist.
 - Never say you "can't" do something without trying first. Use the tools creatively - run multiple searches if needed.
+
+WEB SEARCH CAPABILITIES:
+- Use web_search to find information not in the library - reviews, news, actor info, upcoming movies, release dates
+- Use lookup_movie_external to get IMDB/Rotten Tomatoes ratings, box office data, and awards for any movie
+- If user asks "is X good?", "should I watch X?", or wants info about a movie not in their library, use these tools
+- You can now answer general entertainment questions, find reviews, and research movies before recommending them
 
 SIMILAR MOVIES: Each recommendation must be by a DIFFERENT director. Check before responding.
 

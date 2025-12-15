@@ -14,17 +14,18 @@ export interface AppSettings {
   plexUrl: string;
   plexToken: string;
   anthropicKey: string;
+  omdbKey: string;
 }
 
 export function getSettings(): AppSettings {
   if (typeof window === "undefined") {
-    return { plexUrl: "", plexToken: "", anthropicKey: "" };
+    return { plexUrl: "", plexToken: "", anthropicKey: "", omdbKey: "" };
   }
   try {
     const stored = localStorage.getItem(SETTINGS_KEY);
-    return stored ? JSON.parse(stored) : { plexUrl: "", plexToken: "", anthropicKey: "" };
+    return stored ? JSON.parse(stored) : { plexUrl: "", plexToken: "", anthropicKey: "", omdbKey: "" };
   } catch {
-    return { plexUrl: "", plexToken: "", anthropicKey: "" };
+    return { plexUrl: "", plexToken: "", anthropicKey: "", omdbKey: "" };
   }
 }
 
@@ -36,6 +37,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [plexUrl, setPlexUrl] = useState("");
   const [plexToken, setPlexToken] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [omdbKey, setOmdbKey] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -44,12 +46,13 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
       setPlexUrl(settings.plexUrl);
       setPlexToken(settings.plexToken);
       setAnthropicKey(settings.anthropicKey);
+      setOmdbKey(settings.omdbKey || "");
       setSaved(false);
     }
   }, [isOpen]);
 
   const handleSave = () => {
-    saveSettings({ plexUrl, plexToken, anthropicKey });
+    saveSettings({ plexUrl, plexToken, anthropicKey, omdbKey });
     setSaved(true);
     setTimeout(() => {
       onSave();
@@ -61,6 +64,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     setPlexUrl("");
     setPlexToken("");
     setAnthropicKey("");
+    setOmdbKey("");
     localStorage.removeItem(SETTINGS_KEY);
     setSaved(false);
   };
@@ -133,6 +137,23 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               placeholder="sk-ant-..."
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none focus:border-plex-orange/50 transition-colors"
             />
+          </div>
+
+          {/* OMDB API Key */}
+          <div>
+            <label className="block text-sm text-foreground/60 mb-1.5">
+              OMDB API Key <span className="text-foreground/30">(optional)</span>
+            </label>
+            <input
+              type="password"
+              value={omdbKey}
+              onChange={(e) => setOmdbKey(e.target.value)}
+              placeholder="Your OMDB API key"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none focus:border-plex-orange/50 transition-colors"
+            />
+            <p className="text-xs text-foreground/30 mt-1">
+              For external movie ratings. Free at omdbapi.com
+            </p>
           </div>
 
           {/* Info */}

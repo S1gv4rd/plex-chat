@@ -112,6 +112,7 @@ export default function Home() {
           plexUrl: settings.plexUrl || undefined,
           plexToken: settings.plexToken || undefined,
           anthropicKey: settings.anthropicKey || undefined,
+          omdbKey: settings.omdbKey || undefined,
         }),
       });
 
