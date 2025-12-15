@@ -48,7 +48,13 @@ function extractTitles(content: string): string[] {
   ];
 
   return matches
-    .map(m => m.replace(/\*\*/g, "").split(" (")[0].trim())
+    .map(m => m
+      .replace(/\*\*/g, "")
+      .split(" (")[0]
+      .split(" — ")[0]  // Remove " — Complete Details:" etc.
+      .split(":")[0]    // Remove trailing colons
+      .trim()
+    )
     .filter(t => {
       if (t.length === 0 || t.length > 40) return false;
       // Filter out section headings and action phrases
