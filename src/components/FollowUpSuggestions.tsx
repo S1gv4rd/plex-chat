@@ -71,9 +71,17 @@ function generateFollowUps(lastMessage: string): string[] {
   const lower = lastMessage.toLowerCase();
   const suggestions: string[] = [];
 
+  // Detect if this is already a detailed response (has cast, runtime, synopsis, etc.)
+  const isDetailedView =
+    (lower.includes("**cast:**") || lower.includes("**cast**")) &&
+    (lower.includes("runtime:") || lower.includes("director"));
+
   // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
-    suggestions.push(`More about ${titles[0]}`);
+    // Only offer "More about" if this isn't already a detailed view
+    if (!isDetailedView) {
+      suggestions.push(`More about ${titles[0]}`);
+    }
     suggestions.push(`Similar to ${titles[0]}`);
   }
 
