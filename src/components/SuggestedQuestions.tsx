@@ -7,104 +7,38 @@ interface SuggestedQuestionsProps {
 }
 
 const defaultSuggestions = [
-  // Mood-based
-  "I'm bored, surprise me",
-  "Cheer me up with something funny",
-  "I need to unwind after a long day",
-  "Feeling nostalgic tonight",
-  "Something cozy for a rainy day",
-  "I can't sleep, something calming",
-  "I want my mind blown",
-  "Feeling adventurous!",
-  "I need a good cry",
-  "Something heartwarming",
-  "I want to feel inspired",
-  "Escape reality for a few hours",
+  // Quick actions
+  "Surprise me",
+  "Spin the wheel",
+  "What should I watch?",
 
-  // Social context
-  "Perfect movie for date night",
-  "Something the whole family can watch",
-  "Movie night with friends",
-  "Solo viewing, dealer's choice",
-  "Background movie while I work",
-  "Something to watch with my parents",
+  // Mood
+  "Something funny",
+  "Something intense",
+  "Something relaxing",
 
-  // Time-based
-  "Quick watch under 90 minutes",
-  "Epic movie for a lazy Sunday",
-  "What's a good weekend binge?",
-  "Short episodes I can squeeze in",
-  "A movie I can pause and resume",
+  // Context
+  "Date night movie",
+  "Family friendly",
+  "Quick watch",
 
-  // Genre exploration
-  "Best sci-fi in my library",
-  "Underrated thrillers I own",
-  "Scary movies for tonight",
-  "Classic action films",
-  "Romantic comedies please",
-  "Mind-bending psychological films",
-  "Best documentaries I have",
-  "Animated movies for adults",
-  "Crime dramas to binge",
-  "Fantasy epics in my collection",
+  // Genres
+  "Best thrillers",
+  "Sci-fi picks",
+  "Horror movies",
 
   // Discovery
-  "Hidden gems I might have missed",
-  "Critically acclaimed unwatched films",
-  "Overlooked movies in my library",
-  "What's the highest rated unwatched?",
-  "Cult classics I should watch",
-  "Award winners I haven't seen",
+  "Hidden gems",
+  "What's new?",
+  "My collections",
 
-  // Decades & eras
-  "Best 80s movies I own",
-  "90s nostalgia trip",
-  "Classic films from the golden age",
-  "Modern masterpieces from the 2020s",
-  "2000s movies I forgot about",
+  // TV
+  "What should I binge?",
+  "Best TV shows",
 
-  // Actor/director search
-  "Movies with Leonardo DiCaprio",
-  "Directed by Denis Villeneuve",
-  "Anything with Meryl Streep",
-  "Wes Anderson films I have",
-  "Movies starring Oscar Isaac",
-  "Spielberg classics in my library",
-
-  // TV Shows specific
-  "Best TV shows to start",
-  "Short series under 3 seasons",
-  "Completed shows I can binge",
-  "What show should I start next?",
-  "Limited series recommendations",
-  "Comedy shows to binge",
-
-  // Library stats & exploration
-  "What's my most watched genre?",
-  "Show me my viewing stats",
-  "What have I watched recently?",
-  "What's on my watchlist?",
-  "Recently added to my library",
-  "What am I in the middle of?",
-  "Show me my collections",
-  "Most popular in my library",
-
-  // Similar content
-  "Movies like Interstellar",
-  "Shows similar to Breaking Bad",
-  "More like The Dark Knight",
-  "If I liked Parasite, what else?",
-  "Something in the style of Wes Anderson",
-
-  // Specific requests
-  "Best movie I haven't watched",
-  "Random pick for tonight",
-  "What's the longest movie I own?",
-  "Foreign films with subtitles",
-  "Based on true stories",
-  "Book adaptations in my library",
-  "Movies with twist endings",
-  "Visually stunning films",
+  // Stats
+  "My watch stats",
+  "Recently watched",
 ];
 
 function shuffle<T>(array: T[]): T[] {
@@ -117,16 +51,16 @@ function shuffle<T>(array: T[]): T[] {
 }
 
 const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
-  // Start with first 6 items (deterministic for SSR), then shuffle on client
-  const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 6));
+  // Start with first 4 items (deterministic for SSR), then shuffle on client
+  const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 4));
 
   // Shuffle only on client after mount to avoid hydration mismatch
   useEffect(() => {
-    setItems(shuffle(defaultSuggestions).slice(0, 6));
+    setItems(shuffle(defaultSuggestions).slice(0, 4));
   }, []);
 
   const refresh = useCallback(() => {
-    setItems(shuffle(defaultSuggestions).slice(0, 6));
+    setItems(shuffle(defaultSuggestions).slice(0, 4));
   }, []);
 
   return (
