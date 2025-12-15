@@ -80,6 +80,12 @@ function extractTitles(content: string): string[] {
     /^why it's/i,
     /^why you/i,
     /^what makes/i,
+    /rotten tomatoes/i,
+    /^\d+%/,
+    /^oscar/i,
+    /^runtime/i,
+    /^plot$/i,
+    /^specific$/i,
   ];
 
   return matches
