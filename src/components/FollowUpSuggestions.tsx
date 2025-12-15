@@ -57,6 +57,7 @@ function extractTitles(content: string): string[] {
   return matches
     .map(m => m
       .replace(/\*\*/g, "")
+      .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "") // Remove emojis
       .split(" (")[0]
       .split(" — ")[0]  // Remove " — Complete Details:" etc.
       .split(":")[0]    // Remove trailing colons
