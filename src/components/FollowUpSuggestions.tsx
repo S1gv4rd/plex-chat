@@ -43,6 +43,8 @@ function extractTitles(content: string): string[] {
     /^here are/i,
     /^picks?:?$/i,
     /^suggestions?:?$/i,
+    /wheel has spoken/i,
+    /^the wheel/i,
   ];
 
   return matches
