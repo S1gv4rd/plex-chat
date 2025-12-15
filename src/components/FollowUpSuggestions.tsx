@@ -105,7 +105,7 @@ function extractTitles(content: string): string[] {
       if (/^(how|what|where|when|why|which|the best|your|my|a |an )/i.test(t)) return false;
       return true;
     })
-    .slice(0, 3);
+    .slice(0, 6); // Keep more titles for better selection in recommendation lists
 }
 
 function generateFollowUps(lastMessage: string): string[] {
@@ -120,18 +120,37 @@ function generateFollowUps(lastMessage: string): string[] {
   const hasWatchInfo = /watched it \d+ times?/i.test(lastMessage) || /you've watched/i.test(lastMessage);
   const isDetailedView = hasRatingInfo || hasWatchInfo || (hasCastInfo && hasRuntimeInfo);
 
-  // Detect if this is already showing similar movies
-  const isSimilarView = lower.includes("similar to") || lower.includes("like ") && lower.includes("you might") || lower.includes("if you loved") || lower.includes("if you enjoyed");
+  // Detect if this is already showing similar movies / recommendations list
+  const isSimilarView =
+    lower.includes("similar to") ||
+    (lower.includes("like ") && lower.includes("you might")) ||
+    lower.includes("if you loved") ||
+    lower.includes("if you enjoyed") ||
+    lower.includes("let me suggest") ||
+    lower.includes("films from your library") ||
+    lower.includes("movies from your library") ||
+    lower.includes("these all share") ||
+    lower.includes("which of these") ||
+    (lower.includes("what makes") && lower.includes("special"));
 
   // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
-    // For lists of movies, pick a random one for "More about" (skip first if it's the source movie in similar view)
-    const moreAboutTitles = isSimilarView && titles.length > 1 ? titles.slice(1) : titles;
-    const randomTitle = moreAboutTitles[Math.floor(Math.random() * moreAboutTitles.length)];
+    // For similar/recommendation views, skip the first title (source movie) and prefer later titles
+    let moreAboutTitle: string | undefined;
+    if (isSimilarView && titles.length > 1) {
+      // Skip first (source movie), pick randomly from remaining, preferring later ones
+      const candidates = titles.slice(1);
+      // Weight towards later titles (3rd, 4th position) by picking from latter half when possible
+      const startIndex = candidates.length > 2 ? Math.floor(candidates.length / 2) : 0;
+      const laterCandidates = candidates.slice(startIndex);
+      moreAboutTitle = laterCandidates[Math.floor(Math.random() * laterCandidates.length)];
+    } else {
+      moreAboutTitle = titles[Math.floor(Math.random() * titles.length)];
+    }
 
     // Only offer "More about" if this isn't already a detailed view
-    if (!isDetailedView && randomTitle) {
-      suggestions.push(`More about ${randomTitle}`);
+    if (!isDetailedView && moreAboutTitle) {
+      suggestions.push(`More about ${moreAboutTitle}`);
     }
     // Only offer "Similar to" if this isn't already showing similar movies
     if (!isSimilarView) {
