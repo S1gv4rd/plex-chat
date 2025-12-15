@@ -10,89 +10,62 @@ interface FollowUpSuggestionsProps {
 // Extract movie/show titles from the message (bold markdown format)
 function extractTitles(content: string): string[] {
   const matches = content.match(/\*\*([^*]+)\*\*/g) || [];
+
+  // Words/phrases that are headings, not titles
+  const excludePatterns = [
+    /^tv shows?:?$/i,
+    /^movies?:?$/i,
+    /^cast:?$/i,
+    /^synopsis:?$/i,
+    /^directors?:?$/i,
+    /^writers?:?$/i,
+    /^rating:?$/i,
+    /^genres?:?$/i,
+    /^summary:?$/i,
+    /^details:?$/i,
+    /^studio:?$/i,
+  ];
+
   return matches
     .map(m => m.replace(/\*\*/g, "").split(" (")[0].trim())
-    .filter(t => t.length > 0 && t.length < 50)
-    .slice(0, 5);
-}
-
-// Detect what type of content was discussed
-function detectContext(content: string): {
-  hasMovies: boolean;
-  hasShows: boolean;
-  hasStats: boolean;
-  hasGenre: string | null;
-  hasPerson: string | null;
-} {
-  const lower = content.toLowerCase();
-  return {
-    hasMovies: lower.includes("movie") || lower.includes("film"),
-    hasShows: lower.includes("show") || lower.includes("series") || lower.includes("episode"),
-    hasStats: lower.includes("watched") || lower.includes("viewing") || lower.includes("stats"),
-    hasGenre: extractGenre(lower),
-    hasPerson: extractPerson(content),
-  };
-}
-
-function extractGenre(content: string): string | null {
-  const genres = ["comedy", "drama", "action", "horror", "sci-fi", "thriller", "romance", "documentary"];
-  for (const genre of genres) {
-    if (content.includes(genre)) return genre;
-  }
-  return null;
-}
-
-function extractPerson(content: string): string | null {
-  // Look for "directed by X" or "with X" patterns
-  const directorMatch = content.match(/directed by ([A-Z][a-z]+ [A-Z][a-z]+)/);
-  if (directorMatch) return directorMatch[1];
-  return null;
+    .filter(t => {
+      if (t.length === 0 || t.length > 40) return false;
+      return !excludePatterns.some(pattern => pattern.test(t));
+    })
+    .slice(0, 3);
 }
 
 function generateFollowUps(lastMessage: string): string[] {
   const titles = extractTitles(lastMessage);
-  const context = detectContext(lastMessage);
+  const lower = lastMessage.toLowerCase();
   const suggestions: string[] = [];
 
-  // Title-based suggestions
+  // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
-    const firstTitle = titles[0];
-    suggestions.push(`Tell me more about ${firstTitle}`);
-    suggestions.push(`Find something similar to ${firstTitle}`);
+    suggestions.push(`More about ${titles[0]}`);
+    suggestions.push(`Similar to ${titles[0]}`);
   }
 
-  // Context-based suggestions
-  if (context.hasMovies && !context.hasShows) {
-    suggestions.push("What about TV shows instead?");
-  }
-  if (context.hasShows && !context.hasMovies) {
-    suggestions.push("Any movie recommendations?");
-  }
-  if (context.hasGenre) {
-    suggestions.push(`More ${context.hasGenre} recommendations`);
-  }
-  if (context.hasPerson) {
-    suggestions.push(`What else from ${context.hasPerson}?`);
-  }
-  if (context.hasStats) {
-    suggestions.push("What should I watch next?");
+  // Content type switching
+  const hasMovies = lower.includes("movie") || lower.includes("film");
+  const hasShows = lower.includes("show") || lower.includes("series") || lower.includes("tv");
+
+  if (hasMovies && !hasShows && suggestions.length < 3) {
+    suggestions.push("Show me TV shows instead");
+  } else if (hasShows && !hasMovies && suggestions.length < 3) {
+    suggestions.push("What about movies?");
   }
 
-  // General follow-ups if we don't have enough
-  const generalFollowUps = [
-    "Something completely different",
-    "What's new in my library?",
-    "Any hidden gems?",
-    "What's popular right now?",
+  // Fill remaining slots with contextual suggestions
+  const fillers = [
+    "Something different",
+    "Surprise me",
+    "What else is good?",
   ];
 
-  while (suggestions.length < 3) {
-    const next = generalFollowUps.shift();
-    if (next && !suggestions.includes(next)) {
-      suggestions.push(next);
-    } else {
-      break;
-    }
+  for (const filler of fillers) {
+    if (suggestions.length >= 3) break;
+    suggestions.push(filler);
   }
 
   return suggestions.slice(0, 3);
