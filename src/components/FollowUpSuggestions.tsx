@@ -101,8 +101,10 @@ function extractTitles(content: string): string[] {
       if (t.length === 0 || t.length > 40) return false;
       // Filter out section headings and action phrases
       if (excludePatterns.some(pattern => pattern.test(t))) return false;
-      // Filter out if it contains common non-title words
-      if (/^(how|what|where|when|why|which|the best|your|my|a |an )/i.test(t)) return false;
+      // Filter out if it contains common non-title words or is a descriptive phrase
+      if (/^(how|what|where|when|why|which|the best|your|my|a |an |something )/i.test(t)) return false;
+      // Filter out clarifying question options
+      if (/genre|mood|lighter|specific|particular|total|instead of/i.test(t)) return false;
       return true;
     })
     .slice(0, 6); // Keep more titles for better selection in recommendation lists
