@@ -38,6 +38,11 @@ function extractTitles(content: string): string[] {
     /by director/i,
     /or franchise/i,
     /collections?$/i,
+    /^top /i,
+    /recommendations?:?$/i,
+    /^here are/i,
+    /^picks?:?$/i,
+    /^suggestions?:?$/i,
   ];
 
   return matches
