@@ -63,6 +63,23 @@ function extractTitles(content: string): string[] {
     /thrillers?$/i,
     /films?$/i,
     /movies?$/i,
+    /^the basics$/i,
+    /^the story$/i,
+    /^the plot$/i,
+    /^the premise$/i,
+    /^the cast$/i,
+    /^the verdict$/i,
+    /^the bottom line$/i,
+    /^the runtime$/i,
+    /^the good$/i,
+    /^the bad$/i,
+    /^the takeaway$/i,
+    /^the setup$/i,
+    /^the vibe$/i,
+    /^best for$/i,
+    /^why it's/i,
+    /^why you/i,
+    /^what makes/i,
   ];
 
   return matches
