@@ -52,6 +52,17 @@ function extractTitles(content: string): string[] {
     /^your /i,
     /full picture/i,
     /full scoop/i,
+    /^beyond /i,
+    /^more /i,
+    /^other /i,
+    /^some /i,
+    /sci-fi/i,
+    /action-focused/i,
+    /mind-bending/i,
+    /puzzle-box/i,
+    /thrillers?$/i,
+    /films?$/i,
+    /movies?$/i,
   ];
 
   return matches
