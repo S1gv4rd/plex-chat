@@ -603,8 +603,8 @@ STYLE-BASED AND SIMILAR MOVIE REQUESTS:
               content: toolResults,
             });
 
-            // Send "thinking" status before next API call
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "Thinking..." })}\n\n`));
+            // Send status before next API call
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "Preparing response..." })}\n\n`));
 
             response = await anthropic.messages.create({
               model: "claude-haiku-4-5-20251001",
