@@ -513,7 +513,37 @@ export function invalidateCache(): void {
   console.log("[Plex Cache] Cache invalidated");
 }
 
-// Get similar/related movies
+// Check if two titles are from the same franchise (sequels, prequels, etc.)
+function isSameFranchise(title1: string, title2: string): boolean {
+  const normalize = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+  const t1 = normalize(title1);
+  const t2 = normalize(title2);
+
+  // Exact match
+  if (t1 === t2) return true;
+
+  // One title contains the other (e.g., "The Matrix" and "The Matrix Reloaded")
+  if (t1.includes(t2) || t2.includes(t1)) return true;
+
+  // Check for common franchise patterns
+  const getBaseName = (t: string) => {
+    // Remove common sequel indicators
+    return t
+      .replace(/\s*(2|3|4|5|ii|iii|iv|v|vi|part\s*\d+|chapter\s*\d+|reloaded|revolutions|resurrection|returns|rising|awakens|strikes back|revenge|reckoning|redemption|legacy|origins|generations|salvation|genisys|dark fate)\s*$/i, "")
+      .trim();
+  };
+
+  const base1 = getBaseName(t1);
+  const base2 = getBaseName(t2);
+
+  if (base1.length > 3 && base2.length > 3) {
+    if (base1 === base2 || base1.includes(base2) || base2.includes(base1)) return true;
+  }
+
+  return false;
+}
+
+// Get similar/related movies (excluding sequels from the same franchise)
 export async function getSimilarMovies(title: string, count = 5): Promise<PlexMediaItem[]> {
   // First find the movie
   const searchResults = await searchLibrary(title);
@@ -521,33 +551,97 @@ export async function getSimilarMovies(title: string, count = 5): Promise<PlexMe
 
   if (!movie) return [];
 
-  try {
-    const data = await plexFetch(`/library/metadata/${movie.ratingKey}/similar`);
-    const similar = parseMediaItems(data?.MediaContainer?.Metadata);
-    return similar.slice(0, count);
-  } catch {
-    // Fallback: find movies with same genre/director
-    const libraries = await getLibraries();
-    const movieLibs = libraries.filter(l => l.type === "movie");
-    const candidates: PlexMediaItem[] = [];
+  const libraries = await getLibraries();
+  const movieLibs = libraries.filter(l => l.type === "movie");
 
-    for (const lib of movieLibs) {
-      if (movie.genres?.[0]) {
-        const genreData = await plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(movie.genres[0])}`).catch(() => null);
-        if (genreData?.MediaContainer?.Metadata) {
-          candidates.push(...parseMediaItems(genreData.MediaContainer.Metadata));
-        }
+  // Collect candidates from multiple sources with scoring
+  const candidateScores = new Map<string, { item: PlexMediaItem; score: number }>();
+
+  // Helper to add candidate with score
+  const addCandidate = (item: PlexMediaItem, points: number) => {
+    if (item.ratingKey === movie.ratingKey) return; // Skip the original
+    if (isSameFranchise(item.title, movie.title)) return; // Skip sequels/prequels
+
+    const existing = candidateScores.get(item.ratingKey);
+    if (existing) {
+      existing.score += points;
+    } else {
+      candidateScores.set(item.ratingKey, { item, score: points });
+    }
+  };
+
+  const fetches: Promise<void>[] = [];
+
+  // Search by genres (highest priority for primary genre)
+  if (movie.genres && movie.genres.length > 0) {
+    for (let i = 0; i < Math.min(movie.genres.length, 2); i++) {
+      const genre = movie.genres[i];
+      const points = i === 0 ? 3 : 1; // Primary genre worth more
+
+      for (const lib of movieLibs) {
+        fetches.push(
+          plexFetch(`/library/sections/${lib.key}/all?genre=${encodeURIComponent(genre)}`, CACHE_TTL.LIBRARY_CONTENT)
+            .then(data => {
+              if (data?.MediaContainer?.Metadata) {
+                for (const item of parseMediaItems(data.MediaContainer.Metadata)) {
+                  addCandidate(item, points);
+                }
+              }
+            })
+            .catch(() => {})
+        );
       }
     }
-
-    // Filter out the original movie and shuffle
-    const filtered = candidates.filter(m => m.ratingKey !== movie.ratingKey);
-    for (let i = filtered.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
-    }
-    return filtered.slice(0, count);
   }
+
+  // Search by director (good signal for style)
+  if (movie.directors && movie.directors.length > 0) {
+    const director = movie.directors[0];
+    for (const lib of movieLibs) {
+      fetches.push(
+        plexFetch(`/library/sections/${lib.key}/all?director=${encodeURIComponent(director)}`, CACHE_TTL.LIBRARY_CONTENT)
+          .then(data => {
+            if (data?.MediaContainer?.Metadata) {
+              for (const item of parseMediaItems(data.MediaContainer.Metadata)) {
+                addCandidate(item, 2);
+              }
+            }
+          })
+          .catch(() => {})
+      );
+    }
+  }
+
+  // Search by lead actors
+  if (movie.actors && movie.actors.length > 0) {
+    const actor = movie.actors[0];
+    for (const lib of movieLibs) {
+      fetches.push(
+        plexFetch(`/library/sections/${lib.key}/all?actor=${encodeURIComponent(actor)}`, CACHE_TTL.LIBRARY_CONTENT)
+          .then(data => {
+            if (data?.MediaContainer?.Metadata) {
+              for (const item of parseMediaItems(data.MediaContainer.Metadata)) {
+                addCandidate(item, 1);
+              }
+            }
+          })
+          .catch(() => {})
+      );
+    }
+  }
+
+  await Promise.all(fetches);
+
+  // Sort by score (descending) and add some randomization for variety
+  const sorted = Array.from(candidateScores.values())
+    .sort((a, b) => {
+      // Add small random factor to mix up results with same score
+      const randomFactor = (Math.random() - 0.5) * 0.5;
+      return (b.score + randomFactor) - (a.score + randomFactor);
+    })
+    .map(c => c.item);
+
+  return sorted.slice(0, count);
 }
 
 // Get collections
