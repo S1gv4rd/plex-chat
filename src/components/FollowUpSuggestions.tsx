@@ -72,9 +72,9 @@ function generateFollowUps(lastMessage: string): string[] {
   const suggestions: string[] = [];
 
   // Detect if this is already a detailed response (has cast, runtime, synopsis, etc.)
-  const isDetailedView =
-    (lower.includes("**cast:**") || lower.includes("**cast**")) &&
-    (lower.includes("runtime:") || lower.includes("director"));
+  const hasCastInfo = lower.includes("cast:") || lower.includes("cast**") || lower.includes("full cast");
+  const hasRuntimeInfo = lower.includes("runtime") || lower.includes("hour") && lower.includes("minute");
+  const isDetailedView = hasCastInfo && hasRuntimeInfo;
 
   // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
