@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems } from "@/lib/plex";
+import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
 const anthropic = new Anthropic({
@@ -166,6 +166,20 @@ const tools: Anthropic.Tool[] = [
         }
       },
       required: ["collection"]
+    }
+  },
+  {
+    name: "get_media_details",
+    description: "Get detailed information about a specific movie or TV show including full cast, directors, writers, ratings, summary, and more. Use this when the user asks to 'tell me more about', 'what is X about', 'who stars in', 'details about', or wants in-depth info about a specific title.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: {
+          type: "string",
+          description: "The title of the movie or show to get details for"
+        }
+      },
+      required: ["title"]
     }
   }
 ];
@@ -335,6 +349,60 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
       response += `- **${item.title}** (${item.year || "?"})\n`;
     }
     return response;
+  } else if (toolName === "get_media_details") {
+    const details = await getMediaDetails(toolInput.title as string);
+    if (!details) {
+      return `Could not find "${toolInput.title}" in the library.`;
+    }
+    let response = `**${details.title}** (${details.year || "?"})`;
+    if (details.contentRating) response += ` [${details.contentRating}]`;
+    if (details.duration) response += ` - ${details.duration}`;
+    response += `\n\n`;
+
+    if (details.rating) {
+      response += `Rating: ${details.rating}/10\n`;
+    }
+    if (details.genres.length > 0) {
+      response += `Genres: ${details.genres.join(", ")}\n`;
+    }
+    if (details.studio) {
+      response += `Studio: ${details.studio}\n`;
+    }
+    response += `\n`;
+
+    if (details.summary) {
+      response += `**Synopsis:**\n${details.summary}\n\n`;
+    }
+
+    if (details.directors.length > 0) {
+      response += `**Director${details.directors.length > 1 ? "s" : ""}:** ${details.directors.join(", ")}\n`;
+    }
+    if (details.writers.length > 0) {
+      response += `**Writer${details.writers.length > 1 ? "s" : ""}:** ${details.writers.join(", ")}\n`;
+    }
+
+    if (details.cast.length > 0) {
+      response += `\n**Cast:**\n`;
+      for (const actor of details.cast) {
+        response += `- ${actor.name} as ${actor.role}\n`;
+      }
+    }
+
+    response += `\n`;
+    if (details.addedAt) {
+      response += `Added to library: ${details.addedAt}\n`;
+    }
+    if (details.viewCount) {
+      response += `Watched ${details.viewCount} time${details.viewCount > 1 ? "s" : ""}`;
+      if (details.lastViewedAt) {
+        response += ` (last: ${details.lastViewedAt})`;
+      }
+      response += `\n`;
+    } else {
+      response += `Not yet watched\n`;
+    }
+
+    return response;
   }
   return "Unknown tool";
 }
@@ -367,22 +435,39 @@ ${libraryContext}
 
 IMPORTANT - Always use tools to get accurate information:
 - Use get_recommendations when the user asks "what should I watch", wants suggestions, or asks for recommendations (for MOVIES only)
+- Use get_tv_recommendations when the user wants TV shows or something to binge
 - Use search_by_genre when asking about specific genres like "comedies", "horror movies", "sci-fi" - set type to "show" for TV shows
 - Use search_by_person when asking about actors or directors
 - Use search_library to find specific titles
+- Use get_media_details when the user asks "tell me more about X", "what is X about", "who's in X", or wants detailed info about a specific title
 - Use get_watch_history when asking about their viewing history or what they've watched
 - Use get_watch_stats when asking about viewing statistics, habits, top genres, or most-watched
 - Use get_watchlist when asking about their watchlist or what they plan to watch
+- Use get_similar_movies to find movies similar to one the user liked
 
 CRITICAL - Understand the difference between movies and TV shows:
-- "Binge", "binge-watch", "series", "show", "TV show", "what to start" = TV SHOWS (use search_by_genre with type="show")
+- "Binge", "binge-watch", "series", "show", "TV show", "what to start" = TV SHOWS (use get_tv_recommendations or search_by_genre with type="show")
 - "Movie", "film", "quick watch", "movie night" = MOVIES
 - When user asks for something to "binge" or a "weekend binge", they want TV SHOWS, not movies
+
+MOOD-BASED RECOMMENDATIONS - Map moods to genres:
+- "I'm bored" / "something exciting" → Action, Adventure, Thriller
+- "I'm sad" / "feeling down" / "cheer me up" → Comedy, Feel-good, Animation
+- "I'm stressed" / "need to relax" → Comedy, Romance, Documentary
+- "feeling nostalgic" → Classic films, movies from their most-watched decades
+- "date night" / "romantic evening" → Romance, Romantic Comedy, Drama
+- "can't sleep" / "something light" → Comedy, Animation, Light Drama
+- "want to think" / "mind-bending" → Sci-Fi, Thriller, Mystery
+- "feeling adventurous" → Adventure, Sci-Fi, Fantasy
+- "rainy day" / "cozy" → Drama, Romance, Mystery
+- "Halloween" / "scary" / "creepy" → Horror, Thriller
+- "family time" / "kids watching" → Animation, Family, Comedy (check content rating)
 
 Guidelines:
 - Be conversational and friendly
 - Keep responses concise but helpful
 - When recommending, pick 3-5 items and explain briefly why each might appeal to them
+- For mood-based requests, acknowledge the mood and explain why your picks fit
 - Don't just list the recently added items - use the tools to search the full library
 - "On Deck" shows what they're currently watching`;
 

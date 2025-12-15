@@ -5,6 +5,7 @@ import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import LibraryStats from "@/components/LibraryStats";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
+import FollowUpSuggestions from "@/components/FollowUpSuggestions";
 import { PlexLibrarySummary } from "@/lib/plex";
 
 interface Message {
@@ -12,6 +13,28 @@ interface Message {
   content: string;
 }
 
+const STORAGE_KEY = "plex-chat-history";
+const MAX_STORED_MESSAGES = 50;
+
+function loadMessages(): Message[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMessages(messages: Message[]) {
+  try {
+    // Keep only recent messages to avoid storage limits
+    const toStore = messages.slice(-MAX_STORED_MESSAGES);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+  } catch {
+    // Storage full or unavailable
+  }
+}
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,7 +43,24 @@ export default function Home() {
   const [streamingContent, setStreamingContent] = useState("");
   const [librarySummary, setLibrarySummary] = useState<PlexLibrarySummary | null>(null);
   const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    const stored = loadMessages();
+    if (stored.length > 0) {
+      setMessages(stored);
+    }
+    setHistoryLoaded(true);
+  }, []);
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (historyLoaded && messages.length > 0) {
+      saveMessages(messages);
+    }
+  }, [messages, historyLoaded]);
 
   useEffect(() => {
     // Fetch library summary in background - don't block UI
@@ -110,6 +150,7 @@ export default function Home() {
 
   const resetChat = useCallback(() => {
     setMessages([]);
+    localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   return (
@@ -150,6 +191,13 @@ export default function Home() {
               ))}
               {streamingContent && <ChatMessage role="assistant" content={streamingContent} isStreaming />}
               {isLoading && !streamingContent && <TypingIndicator />}
+              {/* Show follow-up suggestions after last assistant message */}
+              {!isLoading && !streamingContent && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
+                <FollowUpSuggestions
+                  lastMessage={messages[messages.length - 1].content}
+                  onSelect={sendMessage}
+                />
+              )}
               <div ref={messagesEndRef} />
             </>
           )}

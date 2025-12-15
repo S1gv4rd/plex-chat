@@ -7,31 +7,44 @@ interface SuggestedQuestionsProps {
 }
 
 const defaultSuggestions = [
+  // Mood-based
+  "I'm bored, surprise me",
+  "I'm feeling sad, cheer me up",
+  "I need to relax after a long day",
+  "Feeling nostalgic tonight",
+  "Something for date night",
+  "I can't sleep, something light",
+  "I want something mind-bending",
+  "Feeling adventurous!",
+  "It's a rainy day, something cozy",
+  "I need a good laugh",
+  "Something intense and suspenseful",
+  "A feel-good movie to lift my spirits",
+  // General recommendations
   "What should I watch tonight?",
-  "Recommend a movie for date night",
-  "Something fun for the whole family?",
+  "Something fun for the whole family",
   "What's a good weekend binge?",
   "Surprise me with something good",
-  "I need a laugh, something funny",
-  "Something intense and suspenseful",
-  "A feel-good movie to cheer me up",
-  "Something mind-bending",
+  "Any hidden gems in my collection?",
+  // Genre-based
   "What sci-fi movies do I have?",
   "Show me some thrillers",
   "What horror movies are in my library?",
   "Show me action movies",
+  // Person-based
   "What Tom Hanks movies do I have?",
-  "Films directed by Christopher Nolan?",
+  "Films directed by Christopher Nolan",
   "What Tarantino movies do I own?",
+  // Library exploration
   "What movies haven't I watched yet?",
-  "Any hidden gems in my collection?",
   "What TV shows should I start?",
   "What am I currently watching?",
   "What are my viewing stats?",
-  "What's on my watchlist?",
   "Show me my collections",
+  // Similar content
   "Movies like Inception",
   "Find something similar to The Matrix",
+  "Tell me more about The Godfather",
 ];
 
 function shuffle<T>(array: T[]): T[] {

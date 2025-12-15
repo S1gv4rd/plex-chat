@@ -628,4 +628,77 @@ export async function getPersonalizedSuggestions(): Promise<string[]> {
   return suggestions.slice(0, 4);
 }
 
+// Get detailed info about a specific movie or show
+export async function getMediaDetails(title: string): Promise<{
+  found: boolean;
+  title: string;
+  year?: number;
+  type: string;
+  summary?: string;
+  rating?: number;
+  contentRating?: string;
+  duration?: string;
+  genres: string[];
+  directors: string[];
+  writers: string[];
+  cast: { name: string; role: string }[];
+  studio?: string;
+  originallyAvailable?: string;
+  addedAt?: string;
+  viewCount?: number;
+  lastViewedAt?: string;
+} | null> {
+  // Search for the title
+  const searchResults = await searchLibrary(title);
+  const item = searchResults.find(m => m.type === "movie" || m.type === "show");
+
+  if (!item) return null;
+
+  try {
+    // Get full metadata
+    const data = await plexFetch(`/library/metadata/${item.ratingKey}`, CACHE_TTL.LIBRARY_CONTENT);
+    const meta = data?.MediaContainer?.Metadata?.[0];
+
+    if (!meta) return null;
+
+    // Format duration
+    let duration: string | undefined;
+    if (meta.duration) {
+      const mins = Math.round(meta.duration / 60000);
+      if (mins >= 60) {
+        const hrs = Math.floor(mins / 60);
+        const remainMins = mins % 60;
+        duration = `${hrs}h ${remainMins}m`;
+      } else {
+        duration = `${mins}m`;
+      }
+    }
+
+    return {
+      found: true,
+      title: meta.title,
+      year: meta.year,
+      type: meta.type,
+      summary: meta.summary,
+      rating: meta.rating ? parseFloat(meta.rating.toFixed(1)) : undefined,
+      contentRating: meta.contentRating,
+      duration,
+      genres: meta.Genre?.map((g: { tag: string }) => g.tag) || [],
+      directors: meta.Director?.map((d: { tag: string }) => d.tag) || [],
+      writers: meta.Writer?.map((w: { tag: string }) => w.tag) || [],
+      cast: meta.Role?.slice(0, 8).map((r: { tag: string; role: string }) => ({
+        name: r.tag,
+        role: r.role || "Unknown role",
+      })) || [],
+      studio: meta.studio,
+      originallyAvailable: meta.originallyAvailableAt,
+      addedAt: meta.addedAt ? new Date(meta.addedAt * 1000).toLocaleDateString() : undefined,
+      viewCount: meta.viewCount,
+      lastViewedAt: meta.lastViewedAt ? new Date(meta.lastViewedAt * 1000).toLocaleDateString() : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export type { PlexMediaItem, PlexLibrary, PlexLibrarySummary };
