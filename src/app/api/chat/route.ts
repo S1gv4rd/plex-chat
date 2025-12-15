@@ -611,11 +611,11 @@ CONVERSATION CONTEXT:
           );
           const finalText = textBlock?.text || "I couldn't generate a response.";
 
-          // Stream in chunks for fast delivery
-          const chunkSize = 50;
-          for (let i = 0; i < finalText.length; i += chunkSize) {
-            const chunk = finalText.slice(i, i + chunkSize);
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+          // Stream word by word with small delays for natural feel
+          const words = finalText.split(/(\s+)/);
+          for (const word of words) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: word })}\n\n`));
+            await new Promise(resolve => setTimeout(resolve, 8));
           }
 
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
