@@ -603,8 +603,8 @@ STYLE-BASED AND SIMILAR MOVIE REQUESTS:
               content: toolResults,
             });
 
-            // Send status before next API call
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "Preparing response..." })}\n\n`));
+            // Keep loading indicator without text
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
 
             response = await anthropic.messages.create({
               model: "claude-haiku-4-5-20251001",
