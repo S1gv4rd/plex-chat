@@ -11,34 +11,51 @@ const defaultSuggestions = [
   "Surprise me",
   "Spin the wheel",
   "What should I watch?",
+  "Random pick",
 
   // Mood
   "Something funny",
   "Something intense",
   "Something relaxing",
+  "Feel-good movie",
+  "Mind-bending",
+  "Edge of my seat",
 
   // Context
   "Date night movie",
   "Family friendly",
   "Quick watch",
+  "Lazy Sunday epic",
+  "Solo night in",
 
   // Genres
   "Best thrillers",
   "Sci-fi picks",
   "Horror movies",
+  "Action classics",
+  "Documentaries",
+  "Animated films",
+  "Crime dramas",
+  "Romantic comedies",
 
   // Discovery
   "Hidden gems",
   "What's new?",
   "My collections",
+  "Unwatched favorites",
+  "Award winners",
+  "Foreign films",
 
   // TV
   "What should I binge?",
   "Best TV shows",
+  "Short series",
+  "Comedy shows",
 
-  // Stats
+  // Stats & Library
   "My watch stats",
   "Recently watched",
+  "Most watched genres",
 ];
 
 function shuffle<T>(array: T[]): T[] {
