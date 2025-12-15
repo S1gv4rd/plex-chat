@@ -9,42 +9,102 @@ interface SuggestedQuestionsProps {
 const defaultSuggestions = [
   // Mood-based
   "I'm bored, surprise me",
-  "I'm feeling sad, cheer me up",
-  "I need to relax after a long day",
+  "Cheer me up with something funny",
+  "I need to unwind after a long day",
   "Feeling nostalgic tonight",
-  "Something for date night",
-  "I can't sleep, something light",
-  "I want something mind-bending",
+  "Something cozy for a rainy day",
+  "I can't sleep, something calming",
+  "I want my mind blown",
   "Feeling adventurous!",
-  "It's a rainy day, something cozy",
-  "I need a good laugh",
-  "Something intense and suspenseful",
-  "A feel-good movie to lift my spirits",
-  // General recommendations
-  "What should I watch tonight?",
-  "Something fun for the whole family",
+  "I need a good cry",
+  "Something heartwarming",
+  "I want to feel inspired",
+  "Escape reality for a few hours",
+
+  // Social context
+  "Perfect movie for date night",
+  "Something the whole family can watch",
+  "Movie night with friends",
+  "Solo viewing, dealer's choice",
+  "Background movie while I work",
+  "Something to watch with my parents",
+
+  // Time-based
+  "Quick watch under 90 minutes",
+  "Epic movie for a lazy Sunday",
   "What's a good weekend binge?",
-  "Surprise me with something good",
-  "Any hidden gems in my collection?",
-  // Genre-based
-  "What sci-fi movies do I have?",
-  "Show me some thrillers",
-  "What horror movies are in my library?",
-  "Show me action movies",
-  // Person-based
-  "What Tom Hanks movies do I have?",
-  "Films directed by Christopher Nolan",
-  "What Tarantino movies do I own?",
-  // Library exploration
-  "What movies haven't I watched yet?",
-  "What TV shows should I start?",
-  "What am I currently watching?",
-  "What are my viewing stats?",
+  "Short episodes I can squeeze in",
+  "A movie I can pause and resume",
+
+  // Genre exploration
+  "Best sci-fi in my library",
+  "Underrated thrillers I own",
+  "Scary movies for tonight",
+  "Classic action films",
+  "Romantic comedies please",
+  "Mind-bending psychological films",
+  "Best documentaries I have",
+  "Animated movies for adults",
+  "Crime dramas to binge",
+  "Fantasy epics in my collection",
+
+  // Discovery
+  "Hidden gems I might have missed",
+  "Critically acclaimed unwatched films",
+  "Overlooked movies in my library",
+  "What's the highest rated unwatched?",
+  "Cult classics I should watch",
+  "Award winners I haven't seen",
+
+  // Decades & eras
+  "Best 80s movies I own",
+  "90s nostalgia trip",
+  "Classic films from the golden age",
+  "Modern masterpieces from the 2020s",
+  "2000s movies I forgot about",
+
+  // Actor/director search
+  "Movies with Leonardo DiCaprio",
+  "Directed by Denis Villeneuve",
+  "Anything with Meryl Streep",
+  "Wes Anderson films I have",
+  "Movies starring Oscar Isaac",
+  "Spielberg classics in my library",
+
+  // TV Shows specific
+  "Best TV shows to start",
+  "Short series under 3 seasons",
+  "Completed shows I can binge",
+  "What show should I start next?",
+  "Limited series recommendations",
+  "Comedy shows to binge",
+
+  // Library stats & exploration
+  "What's my most watched genre?",
+  "Show me my viewing stats",
+  "What have I watched recently?",
+  "What's on my watchlist?",
+  "Recently added to my library",
+  "What am I in the middle of?",
   "Show me my collections",
+  "Most popular in my library",
+
   // Similar content
-  "Movies like Inception",
-  "Find something similar to The Matrix",
-  "Tell me more about The Godfather",
+  "Movies like Interstellar",
+  "Shows similar to Breaking Bad",
+  "More like The Dark Knight",
+  "If I liked Parasite, what else?",
+  "Something in the style of Wes Anderson",
+
+  // Specific requests
+  "Best movie I haven't watched",
+  "Random pick for tonight",
+  "What's the longest movie I own?",
+  "Foreign films with subtitles",
+  "Based on true stories",
+  "Book adaptations in my library",
+  "Movies with twist endings",
+  "Visually stunning films",
 ];
 
 function shuffle<T>(array: T[]): T[] {
