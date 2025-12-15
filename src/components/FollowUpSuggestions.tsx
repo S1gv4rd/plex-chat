@@ -111,7 +111,7 @@ function getSuggestionsForType(type: ResponseType, message: string): string[] {
       ].filter(Boolean) as string[];
 
     case "stats":
-      return ["Recommend a movie", "What should I binge?", "Spin the wheel"];
+      return ["Spin the wheel", "Browse collections", "What's new?"];
 
     case "search":
       return ["Something different", "Spin the wheel", "Browse collections"];
@@ -121,7 +121,7 @@ function getSuggestionsForType(type: ResponseType, message: string): string[] {
 
     case "general":
     default:
-      return ["Recommend a movie", "What should I binge?", "Spin the wheel"];
+      return ["Spin the wheel", "Browse collections", "What's new?"];
   }
 }
 
