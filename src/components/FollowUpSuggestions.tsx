@@ -7,193 +7,132 @@ interface FollowUpSuggestionsProps {
   onSelect: (question: string) => void;
 }
 
-// Extract movie/show titles from the message (bold markdown format)
-function extractTitles(content: string): string[] {
-  const matches = content.match(/\*\*([^*]+)\*\*/g) || [];
+type ResponseType =
+  | "detail"      // Detailed info about one movie/show
+  | "list"        // List of recommendations
+  | "similar"     // Similar movies list
+  | "random"      // Random wheel pick
+  | "stats"       // Watch history/stats
+  | "search"      // Search results
+  | "question"    // Clarifying question (no suggestions)
+  | "general";    // General response
 
-  // Words/phrases that are headings or descriptions, not titles
-  const excludePatterns = [
-    /^tv shows?:?$/i,
-    /^movies?:?$/i,
-    /^cast:?$/i,
-    /^synopsis:?$/i,
-    /^directors?:?$/i,
-    /^writers?:?$/i,
-    /^rating:?$/i,
-    /^genres?:?$/i,
-    /^summary:?$/i,
-    /^details:?$/i,
-    /^studio:?$/i,
-    /^search/i,
-    /^browse/i,
-    /^check/i,
-    /^find/i,
-    /^look/i,
-    /^try/i,
-    /^option/i,
-    /^tip/i,
-    /^note/i,
-    /for specific/i,
-    /by genre/i,
-    /by director/i,
-    /or franchise/i,
-    /collections?$/i,
-    /^top /i,
-    /recommendations?:?$/i,
-    /^here are/i,
-    /^picks?:?$/i,
-    /^suggestions?:?$/i,
-    /wheel has spoken/i,
-    /^the wheel/i,
-    /must-watch/i,
-    /mind-bender/i,
-    /^great!/i,
-    /^here's/i,
-    /^your /i,
-    /full picture/i,
-    /full scoop/i,
-    /^beyond /i,
-    /^more /i,
-    /^other /i,
-    /^some /i,
-    /sci-fi/i,
-    /action-focused/i,
-    /mind-bending/i,
-    /puzzle-box/i,
-    /thrillers?$/i,
-    /films?$/i,
-    /movies?$/i,
-    /^the basics$/i,
-    /^the story$/i,
-    /^the plot$/i,
-    /^the premise$/i,
-    /^the cast$/i,
-    /^the verdict$/i,
-    /^the bottom line$/i,
-    /^the runtime$/i,
-    /^the good$/i,
-    /^the bad$/i,
-    /^the takeaway$/i,
-    /^the setup$/i,
-    /^the vibe$/i,
-    /^best for$/i,
-    /^why it's/i,
-    /^why you/i,
-    /^what makes/i,
-    /rotten tomatoes/i,
-    /^\d+%/,
-    /^oscar/i,
-    /^runtime/i,
-    /^plot$/i,
-    /^specific$/i,
-  ];
+function detectResponseType(message: string): ResponseType {
+  const lower = message.toLowerCase();
 
-  return matches
-    .map(m => m
-      .replace(/\*\*/g, "")
-      .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "") // Remove emojis
-      .split(" (")[0]
-      .split(" — ")[0]  // Remove " — Complete Details:" etc.
-      .split(":")[0]    // Remove trailing colons
-      .trim()
-    )
-    .filter(t => {
-      if (t.length === 0 || t.length > 40) return false;
-      // Filter out section headings and action phrases
-      if (excludePatterns.some(pattern => pattern.test(t))) return false;
-      // Filter out if it contains common non-title words or is a descriptive phrase
-      if (/^(how|what|where|when|why|which|the best|your|my|a |an |something )/i.test(t)) return false;
-      // Filter out clarifying question options and descriptive bullet points
-      if (/genre|mood|lighter|specific|particular|total|instead of/i.test(t)) return false;
-      // Filter out "X is Y" descriptive patterns and other non-title phrases
-      if (/\b(is|are)\b.*(terrifying|brilliant|exceptional|complex|warfare|claustrophobic|intimate)/i.test(t)) return false;
-      if (/'s script$/i.test(t)) return false;
-      if (/^(moral|psychological|intimate|emotional|visual|narrative)/i.test(t)) return false;
-      return true;
-    })
-    .slice(0, 6); // Keep more titles for better selection in recommendation lists
-}
-
-function generateFollowUps(lastMessage: string): string[] {
-  const titles = extractTitles(lastMessage);
-  const lower = lastMessage.toLowerCase();
-  const suggestions: string[] = [];
-
-  // Detect if this is already a detailed response (has rating, runtime, cast, watch info, etc.)
-  const hasRatingInfo = /\d+%/.test(lastMessage) && lower.includes("rotten tomatoes");
-  const hasRuntimeInfo = /\d+h \d+m/.test(lastMessage) || (lower.includes("hour") && lower.includes("minute"));
-  const hasCastInfo = lower.includes("cast:") || lower.includes("cast**") || lower.includes("full cast") || lower.includes("performance");
-  const hasWatchInfo = /watched it \d+ times?/i.test(lastMessage) || /you've watched/i.test(lastMessage);
-  const isDetailedView = hasRatingInfo || hasWatchInfo || (hasCastInfo && hasRuntimeInfo);
-
-  // Detect if this is already showing similar movies / recommendations list
-  const isSimilarView =
-    lower.includes("similar to") ||
-    (lower.includes("like ") && lower.includes("you might")) ||
-    lower.includes("if you loved") ||
-    lower.includes("if you enjoyed") ||
-    lower.includes("let me suggest") ||
-    lower.includes("films from your library") ||
-    lower.includes("movies from your library") ||
-    lower.includes("these all share") ||
-    lower.includes("which of these") ||
-    (lower.includes("what makes") && lower.includes("special"));
-
-  // If we have a specific title mentioned, offer to explore it
-  if (titles.length > 0) {
-    // For similar/recommendation views, skip the first title (source movie) and prefer later titles
-    let moreAboutTitle: string | undefined;
-    if (isSimilarView && titles.length > 1) {
-      // Skip first (source movie), pick randomly from remaining, preferring later ones
-      const candidates = titles.slice(1);
-      // Weight towards later titles (3rd, 4th position) by picking from latter half when possible
-      const startIndex = candidates.length > 2 ? Math.floor(candidates.length / 2) : 0;
-      const laterCandidates = candidates.slice(startIndex);
-      moreAboutTitle = laterCandidates[Math.floor(Math.random() * laterCandidates.length)];
-    } else {
-      moreAboutTitle = titles[Math.floor(Math.random() * titles.length)];
-    }
-
-    // Only offer "More about" if this isn't already a detailed view
-    if (!isDetailedView && moreAboutTitle) {
-      suggestions.push(`More about ${moreAboutTitle}`);
-    }
-    // Only offer "Similar to" if this isn't already showing similar movies
-    if (!isSimilarView) {
-      suggestions.push(`Similar to ${titles[0]}`);
-    }
+  // Random wheel pick
+  if (lower.includes("wheel has spoken") || lower.includes("your destiny")) {
+    return "random";
   }
 
-  // Content type switching
+  // Clarifying question - don't show suggestions
+  if (lower.includes("what kind of mood") ||
+      lower.includes("are you looking for") ||
+      lower.includes("let me know what") ||
+      lower.includes("which would you prefer") ||
+      (lower.includes("?") && lower.split("?").length > 3)) {
+    return "question";
+  }
+
+  // Watch stats/history
+  if (lower.includes("viewing stats") ||
+      lower.includes("watch history") ||
+      lower.includes("total movies watched") ||
+      lower.includes("top genres")) {
+    return "stats";
+  }
+
+  // Similar movies
+  if (lower.includes("similar to") ||
+      lower.includes("films like") ||
+      lower.includes("movies like") ||
+      lower.includes("if you enjoyed") ||
+      lower.includes("if you loved") ||
+      (lower.includes("let me suggest") && lower.includes("library"))) {
+    return "similar";
+  }
+
+  // Detailed view (single movie info)
+  if ((lower.includes("rotten tomatoes") && /\d+%/.test(message)) ||
+      lower.includes("synopsis") ||
+      (lower.includes("cast:") || lower.includes("**cast**")) ||
+      (lower.includes("director") && lower.includes("writer"))) {
+    return "detail";
+  }
+
+  // Search results
+  if (lower.includes("search results") || lower.includes("found in your library")) {
+    return "search";
+  }
+
+  // List of recommendations (multiple items)
+  const bulletCount = (message.match(/^- \*\*/gm) || []).length;
+  if (bulletCount >= 3) {
+    return "list";
+  }
+
+  return "general";
+}
+
+function getSuggestionsForType(type: ResponseType, message: string): string[] {
+  const lower = message.toLowerCase();
   const hasMovies = lower.includes("movie") || lower.includes("film");
   const hasShows = lower.includes("show") || lower.includes("series") || lower.includes("tv");
 
-  if (hasMovies && !hasShows && suggestions.length < 3) {
-    suggestions.push("Show me TV shows instead");
-  } else if (hasShows && !hasMovies && suggestions.length < 3) {
-    suggestions.push("What about movies?");
+  const contentSwitch = hasMovies && !hasShows
+    ? "Show me TV shows instead"
+    : hasShows && !hasMovies
+    ? "What about movies?"
+    : null;
+
+  switch (type) {
+    case "random":
+      return ["Spin again", "Something different", "Tell me more about it"];
+
+    case "detail":
+      return [
+        "Find similar movies",
+        contentSwitch || "Something different",
+        "Surprise me"
+      ].filter(Boolean) as string[];
+
+    case "similar":
+      return [
+        contentSwitch || "Something different",
+        "Spin the wheel",
+        "What else is good?"
+      ].filter(Boolean) as string[];
+
+    case "list":
+      return [
+        contentSwitch || "Something different",
+        "Surprise me",
+        "Spin the wheel"
+      ].filter(Boolean) as string[];
+
+    case "stats":
+      return ["Recommend something", "What should I watch?", "Spin the wheel"];
+
+    case "search":
+      return ["Something different", "Recommend something", "Spin the wheel"];
+
+    case "question":
+      return []; // Let user answer the question
+
+    case "general":
+    default:
+      return ["Recommend something", "Surprise me", "Spin the wheel"];
   }
-
-  // Fill remaining slots with contextual suggestions
-  const fillers = [
-    "Something different",
-    "Surprise me",
-    "What else is good?",
-  ];
-
-  for (const filler of fillers) {
-    if (suggestions.length >= 3) break;
-    suggestions.push(filler);
-  }
-
-  return suggestions.slice(0, 3);
 }
 
 const FollowUpSuggestions = memo(function FollowUpSuggestions({
   lastMessage,
   onSelect,
 }: FollowUpSuggestionsProps) {
-  const suggestions = useMemo(() => generateFollowUps(lastMessage), [lastMessage]);
+  const suggestions = useMemo(() => {
+    const type = detectResponseType(lastMessage);
+    return getSuggestionsForType(type, lastMessage);
+  }, [lastMessage]);
 
   if (suggestions.length === 0) return null;
 

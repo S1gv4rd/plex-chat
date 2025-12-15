@@ -368,7 +368,7 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     }
     return response;
   } else if (toolName === "random_movie_picker") {
-    const unwatchedOnly = toolInput.unwatched_only !== false; // default true
+    const unwatchedOnly = toolInput.unwatched_only === undefined ? true : Boolean(toolInput.unwatched_only);
     const genre = toolInput.genre as string | undefined;
     const movie = await pickRandomMovie(unwatchedOnly, genre);
 
