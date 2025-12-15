@@ -402,15 +402,26 @@ Guidelines:
     });
 
     while (response.stop_reason === "tool_use") {
-      const toolUseBlock = response.content.find(
+      // Find ALL tool_use blocks (Claude may call multiple tools at once)
+      const toolUseBlocks = response.content.filter(
         (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
       );
 
-      if (!toolUseBlock) break;
+      if (toolUseBlocks.length === 0) break;
 
-      const toolResult = await processToolCall(
-        toolUseBlock.name,
-        toolUseBlock.input as Record<string, string | number>
+      // Process all tool calls and collect results
+      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolUseBlocks.map(async (toolUseBlock) => {
+          const toolResult = await processToolCall(
+            toolUseBlock.name,
+            toolUseBlock.input as Record<string, string | number>
+          );
+          return {
+            type: "tool_result" as const,
+            tool_use_id: toolUseBlock.id,
+            content: toolResult,
+          };
+        })
       );
 
       apiMessages.push({
@@ -419,13 +430,7 @@ Guidelines:
       });
       apiMessages.push({
         role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: toolUseBlock.id,
-            content: toolResult,
-          },
-        ],
+        content: toolResults,
       });
 
       response = await anthropic.messages.create({
