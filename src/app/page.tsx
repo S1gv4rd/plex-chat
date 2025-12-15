@@ -41,6 +41,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [loadingStatus, setLoadingStatus] = useState<string | null>(null);
   const [librarySummary, setLibrarySummary] = useState<PlexLibrarySummary | null>(null);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -82,6 +83,7 @@ export default function Home() {
     setInput("");
     setIsLoading(true);
     setStreamingContent("");
+    setLoadingStatus(null);
 
     try {
       const response = await fetch("/api/chat", {
@@ -109,6 +111,9 @@ export default function Home() {
             if (data === "[DONE]") break;
             try {
               const parsed = JSON.parse(data);
+              if (parsed.status !== undefined) {
+                setLoadingStatus(parsed.status);
+              }
               if (parsed.text) {
                 fullContent += parsed.text;
                 setStreamingContent(fullContent);
@@ -132,6 +137,7 @@ export default function Home() {
       }]);
     } finally {
       setStreamingContent("");
+      setLoadingStatus(null);
       setIsLoading(false);
     }
   }, [messages, isLoading]);
@@ -200,7 +206,7 @@ export default function Home() {
                 <ChatMessage key={i} role={msg.role} content={msg.content} />
               ))}
               {streamingContent && <ChatMessage role="assistant" content={streamingContent} isStreaming />}
-              {isLoading && !streamingContent && <TypingIndicator />}
+              {isLoading && !streamingContent && <TypingIndicator status={loadingStatus || undefined} />}
               {/* Show follow-up suggestions after last assistant message */}
               {!isLoading && !streamingContent && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
                 <FollowUpSuggestions

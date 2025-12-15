@@ -202,6 +202,23 @@ const tools: Anthropic.Tool[] = [
   }
 ];
 
+// Tool display names for status messages
+const toolStatusMessages: Record<string, string> = {
+  search_by_person: "Searching by actor/director...",
+  search_library: "Searching your library...",
+  get_recommendations: "Finding recommendations...",
+  get_tv_recommendations: "Finding TV shows...",
+  search_by_genre: "Browsing by genre...",
+  get_watch_history: "Loading watch history...",
+  get_watch_stats: "Calculating your stats...",
+  get_watchlist: "Loading watchlist...",
+  get_similar_movies: "Finding similar movies...",
+  get_collections: "Loading collections...",
+  get_collection_items: "Loading collection...",
+  get_media_details: "Getting details...",
+  random_movie_picker: "Spinning the wheel...",
+};
+
 // Process tool calls
 async function processToolCall(toolName: string, toolInput: Record<string, string | number>): Promise<string> {
   if (toolName === "search_by_person") {
@@ -524,77 +541,93 @@ Guidelines:
       content: m.content,
     }));
 
-    // Handle tool use first (non-streaming) - we need complete responses for tool processing
-    let response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: systemPrompt,
-      tools: tools,
-      messages: apiMessages,
-    });
-
-    while (response.stop_reason === "tool_use") {
-      // Find ALL tool_use blocks (Claude may call multiple tools at once)
-      const toolUseBlocks = response.content.filter(
-        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-      );
-
-      if (toolUseBlocks.length === 0) break;
-
-      // Process all tool calls and collect results
-      const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-        toolUseBlocks.map(async (toolUseBlock) => {
-          const toolResult = await processToolCall(
-            toolUseBlock.name,
-            toolUseBlock.input as Record<string, string | number>
-          );
-          return {
-            type: "tool_result" as const,
-            tool_use_id: toolUseBlock.id,
-            content: toolResult,
-          };
-        })
-      );
-
-      apiMessages.push({
-        role: "assistant",
-        content: response.content,
-      });
-      apiMessages.push({
-        role: "user",
-        content: toolResults,
-      });
-
-      response = await anthropic.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        system: systemPrompt,
-        tools: tools,
-        messages: apiMessages,
-      });
-    }
-
-    // Extract the final text response
-    const textBlock = response.content.find(
-      (block): block is Anthropic.TextBlock => block.type === "text"
-    );
-    const finalText = textBlock?.text || "I couldn't generate a response.";
-
-    // Stream the response with realistic timing
     const encoder = new TextEncoder();
+
+    // Create a streaming response that handles both status updates and final text
     const stream = new ReadableStream({
       async start(controller) {
-        // Stream word by word with small delays for natural feel
-        const words = finalText.split(/(\s+)/); // Keep whitespace
+        try {
+          // Initial API call
+          let response = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 1024,
+            system: systemPrompt,
+            tools: tools,
+            messages: apiMessages,
+          });
 
-        for (const word of words) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: word })}\n\n`));
-          // Small delay between words (10-30ms) for natural streaming effect
-          await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 15));
+          // Handle tool use loop with status updates
+          while (response.stop_reason === "tool_use") {
+            const toolUseBlocks = response.content.filter(
+              (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+            );
+
+            if (toolUseBlocks.length === 0) break;
+
+            // Send status message for the tools being used
+            const toolNames = toolUseBlocks.map(t => t.name);
+            const statusMessage = toolStatusMessages[toolNames[0]] || "Searching...";
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: statusMessage })}\n\n`));
+
+            // Process all tool calls
+            const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+              toolUseBlocks.map(async (toolUseBlock) => {
+                const toolResult = await processToolCall(
+                  toolUseBlock.name,
+                  toolUseBlock.input as Record<string, string | number>
+                );
+                return {
+                  type: "tool_result" as const,
+                  tool_use_id: toolUseBlock.id,
+                  content: toolResult,
+                };
+              })
+            );
+
+            apiMessages.push({
+              role: "assistant",
+              content: response.content,
+            });
+            apiMessages.push({
+              role: "user",
+              content: toolResults,
+            });
+
+            // Send "thinking" status before next API call
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "Thinking..." })}\n\n`));
+
+            response = await anthropic.messages.create({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 1024,
+              system: systemPrompt,
+              tools: tools,
+              messages: apiMessages,
+            });
+          }
+
+          // Clear status before streaming text
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: null })}\n\n`));
+
+          // Extract the final text response
+          const textBlock = response.content.find(
+            (block): block is Anthropic.TextBlock => block.type === "text"
+          );
+          const finalText = textBlock?.text || "I couldn't generate a response.";
+
+          // Stream word by word with small delays for natural feel
+          const words = finalText.split(/(\s+)/);
+          for (const word of words) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: word })}\n\n`));
+            await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 15));
+          }
+
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        } catch (error) {
+          console.error("Streaming error:", error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Something went wrong" })}\n\n`));
+          controller.close();
         }
-
-        controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
-        controller.close();
       }
     });
 
