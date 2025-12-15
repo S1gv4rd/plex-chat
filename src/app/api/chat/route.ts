@@ -477,7 +477,7 @@ Guidelines:
       content: m.content,
     }));
 
-    // Handle tool use first (non-streaming)
+    // Handle tool use first (non-streaming) - we need complete responses for tool processing
     let response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
@@ -531,19 +531,21 @@ Guidelines:
     const textBlock = response.content.find(
       (block): block is Anthropic.TextBlock => block.type === "text"
     );
-
     const finalText = textBlock?.text || "I couldn't generate a response.";
 
-    // Stream the response
+    // Stream the response with realistic timing
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
-      start(controller) {
-        // Send text in chunks for streaming effect
-        const chunkSize = 15;
-        for (let i = 0; i < finalText.length; i += chunkSize) {
-          const chunk = finalText.slice(i, i + chunkSize);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+      async start(controller) {
+        // Stream word by word with small delays for natural feel
+        const words = finalText.split(/(\s+)/); // Keep whitespace
+
+        for (const word of words) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: word })}\n\n`));
+          // Small delay between words (10-30ms) for natural streaming effect
+          await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 15));
         }
+
         controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
         controller.close();
       }
