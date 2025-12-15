@@ -120,13 +120,19 @@ function generateFollowUps(lastMessage: string): string[] {
   const hasWatchInfo = /watched it \d+ times?/i.test(lastMessage) || /you've watched/i.test(lastMessage);
   const isDetailedView = hasRatingInfo || hasWatchInfo || (hasCastInfo && hasRuntimeInfo);
 
+  // Detect if this is already showing similar movies
+  const isSimilarView = lower.includes("similar to") || lower.includes("like ") && lower.includes("you might") || lower.includes("if you loved") || lower.includes("if you enjoyed");
+
   // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
     // Only offer "More about" if this isn't already a detailed view
     if (!isDetailedView) {
       suggestions.push(`More about ${titles[0]}`);
     }
-    suggestions.push(`Similar to ${titles[0]}`);
+    // Only offer "Similar to" if this isn't already showing similar movies
+    if (!isSimilarView) {
+      suggestions.push(`Similar to ${titles[0]}`);
+    }
   }
 
   // Content type switching
