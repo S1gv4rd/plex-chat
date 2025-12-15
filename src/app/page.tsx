@@ -165,7 +165,17 @@ export default function Home() {
             </div>
             <span className="text-base font-medium text-foreground">Plex Chat</span>
           </button>
-          <LibraryStats summary={librarySummary} error={libraryError} />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => sendMessage("Spin the wheel!")}
+              disabled={isLoading || !!libraryError}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg"
+              title="Random movie picker"
+            >
+              🎲
+            </button>
+            <LibraryStats summary={librarySummary} error={libraryError} />
+          </div>
         </div>
       </header>
 

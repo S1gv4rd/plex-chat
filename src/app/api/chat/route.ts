@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails } from "@/lib/plex";
+import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails, pickRandomMovie } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
 const anthropic = new Anthropic({
@@ -181,6 +181,24 @@ const tools: Anthropic.Tool[] = [
       },
       required: ["title"]
     }
+  },
+  {
+    name: "random_movie_picker",
+    description: "Pick a random movie from the library. Use this when the user wants a random pick, says 'spin the wheel', 'surprise me', 'random movie', 'pick for me', 'dealer's choice', or wants fate to decide. Can optionally filter by genre or only unwatched movies.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        genre: {
+          type: "string",
+          description: "Optional genre filter (e.g., 'Action', 'Comedy', 'Horror')"
+        },
+        unwatched_only: {
+          type: "boolean",
+          description: "If true, only pick from unwatched movies (default: true)"
+        }
+      },
+      required: []
+    }
   }
 ];
 
@@ -348,6 +366,35 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     for (const item of items) {
       response += `- **${item.title}** (${item.year || "?"})\n`;
     }
+    return response;
+  } else if (toolName === "random_movie_picker") {
+    const unwatchedOnly = toolInput.unwatched_only !== false; // default true
+    const genre = toolInput.genre as string | undefined;
+    const movie = await pickRandomMovie(unwatchedOnly, genre);
+
+    if (!movie) {
+      return genre
+        ? `No ${unwatchedOnly ? "unwatched " : ""}${genre} movies found in the library.`
+        : `No ${unwatchedOnly ? "unwatched " : ""}movies found in the library.`;
+    }
+
+    let response = `🎰 **The wheel has spoken!**\n\n`;
+    response += `🎬 **${movie.title}** (${movie.year || "?"})\n\n`;
+
+    if (movie.genres && movie.genres.length > 0) {
+      response += `**Genre:** ${movie.genres.slice(0, 3).join(", ")}\n`;
+    }
+    if (movie.directors && movie.directors.length > 0) {
+      response += `**Director:** ${movie.directors[0]}\n`;
+    }
+    if (movie.summary) {
+      const shortSummary = movie.summary.length > 200
+        ? movie.summary.slice(0, 200) + "..."
+        : movie.summary;
+      response += `\n${shortSummary}\n`;
+    }
+
+    response += `\n_This is your destiny for tonight!_`;
     return response;
   } else if (toolName === "get_media_details") {
     const details = await getMediaDetails(toolInput.title as string);

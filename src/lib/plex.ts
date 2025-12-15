@@ -795,4 +795,41 @@ export async function getMediaDetails(title: string): Promise<{
   }
 }
 
+// Pick a single random movie from the library
+export async function pickRandomMovie(unwatchedOnly = true, genre?: string): Promise<PlexMediaItem | null> {
+  const libraries = await getLibraries();
+  const movieLibraries = libraries.filter(lib => lib.type === "movie");
+
+  const allMovies: PlexMediaItem[] = [];
+
+  const fetches = movieLibraries.map(async lib => {
+    let endpoint = `/library/sections/${lib.key}/all`;
+    const params: string[] = [];
+
+    if (unwatchedOnly) {
+      params.push("unwatched=1");
+    }
+    if (genre) {
+      params.push(`genre=${encodeURIComponent(genre)}`);
+    }
+
+    if (params.length > 0) {
+      endpoint += "?" + params.join("&");
+    }
+
+    const data = await plexFetch(endpoint, CACHE_TTL.LIBRARY_CONTENT).catch(() => null);
+    if (data?.MediaContainer?.Metadata) {
+      allMovies.push(...parseMediaItems(data.MediaContainer.Metadata));
+    }
+  });
+
+  await Promise.all(fetches);
+
+  if (allMovies.length === 0) return null;
+
+  // Pick a truly random movie
+  const randomIndex = Math.floor(Math.random() * allMovies.length);
+  return allMovies[randomIndex];
+}
+
 export type { PlexMediaItem, PlexLibrary, PlexLibrarySummary };
