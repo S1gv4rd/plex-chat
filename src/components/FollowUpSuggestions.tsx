@@ -20,8 +20,8 @@ type ResponseType =
 function detectResponseType(message: string): ResponseType {
   const lower = message.toLowerCase();
 
-  // Random wheel pick
-  if (lower.includes("wheel has spoken") || lower.includes("your destiny")) {
+  // Random wheel pick - response already offers options, no suggestions needed
+  if (lower.includes("wheel has spoken") || lower.includes("your destiny") || lower.includes("has been selected")) {
     return "random";
   }
 
@@ -87,7 +87,7 @@ function getSuggestionsForType(type: ResponseType, message: string): string[] {
 
   switch (type) {
     case "random":
-      return ["Spin again", "Tell me more", "Something different"];
+      return []; // Response already offers options inline
 
     case "detail":
       return [
