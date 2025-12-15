@@ -103,8 +103,12 @@ function extractTitles(content: string): string[] {
       if (excludePatterns.some(pattern => pattern.test(t))) return false;
       // Filter out if it contains common non-title words or is a descriptive phrase
       if (/^(how|what|where|when|why|which|the best|your|my|a |an |something )/i.test(t)) return false;
-      // Filter out clarifying question options
+      // Filter out clarifying question options and descriptive bullet points
       if (/genre|mood|lighter|specific|particular|total|instead of/i.test(t)) return false;
+      // Filter out "X is Y" descriptive patterns and other non-title phrases
+      if (/\b(is|are)\b.*(terrifying|brilliant|exceptional|complex|warfare|claustrophobic|intimate)/i.test(t)) return false;
+      if (/'s script$/i.test(t)) return false;
+      if (/^(moral|psychological|intimate|emotional|visual|narrative)/i.test(t)) return false;
       return true;
     })
     .slice(0, 6); // Keep more titles for better selection in recommendation lists
