@@ -90,10 +90,11 @@ function generateFollowUps(lastMessage: string): string[] {
   const lower = lastMessage.toLowerCase();
   const suggestions: string[] = [];
 
-  // Detect if this is already a detailed response (has cast, runtime, synopsis, etc.)
-  const hasCastInfo = lower.includes("cast:") || lower.includes("cast**") || lower.includes("full cast");
-  const hasRuntimeInfo = lower.includes("runtime") || lower.includes("hour") && lower.includes("minute");
-  const isDetailedView = hasCastInfo && hasRuntimeInfo;
+  // Detect if this is already a detailed response (has rating, runtime, cast, etc.)
+  const hasRatingInfo = /\d+%/.test(lastMessage) && lower.includes("rotten tomatoes");
+  const hasRuntimeInfo = /\d+h \d+m/.test(lastMessage) || (lower.includes("hour") && lower.includes("minute"));
+  const hasCastInfo = lower.includes("cast:") || lower.includes("cast**") || lower.includes("full cast") || lower.includes("performance");
+  const isDetailedView = (hasRatingInfo && hasRuntimeInfo) || (hasCastInfo && hasRuntimeInfo);
 
   // If we have a specific title mentioned, offer to explore it
   if (titles.length > 0) {
