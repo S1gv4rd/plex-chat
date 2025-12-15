@@ -87,41 +87,41 @@ function getSuggestionsForType(type: ResponseType, message: string): string[] {
 
   switch (type) {
     case "random":
-      return ["Spin again", "Tell me more about it", "Something completely different"];
+      return ["Spin again", "Tell me more", "Something different"];
 
     case "detail":
       return [
-        "Find similar movies",
-        contentSwitch || "My watch stats",
+        "Find similar",
+        contentSwitch || "Something different",
         "Spin the wheel"
       ].filter(Boolean) as string[];
 
     case "similar":
       return [
-        contentSwitch || "Browse my collections",
-        "Spin the wheel",
-        "My watch stats"
+        "Something different",
+        contentSwitch || "Spin the wheel",
+        "Browse collections"
       ].filter(Boolean) as string[];
 
     case "list":
       return [
-        contentSwitch || "Browse my collections",
-        "Spin the wheel",
-        "What's new in my library?"
+        "Something different",
+        contentSwitch || "Spin the wheel",
+        "Browse collections"
       ].filter(Boolean) as string[];
 
     case "stats":
-      return ["Spin the wheel", "What should I binge?", "Browse my collections"];
+      return ["Recommend a movie", "What should I binge?", "Spin the wheel"];
 
     case "search":
-      return ["Spin the wheel", "My watch stats", "What should I binge?"];
+      return ["Something different", "Spin the wheel", "Browse collections"];
 
     case "question":
       return []; // Let user answer the question
 
     case "general":
     default:
-      return ["Spin the wheel", "My watch stats", "What should I binge?"];
+      return ["Recommend a movie", "What should I binge?", "Spin the wheel"];
   }
 }
 
