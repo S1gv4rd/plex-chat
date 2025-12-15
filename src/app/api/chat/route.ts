@@ -520,13 +520,14 @@ Guidelines:
 - IMPORTANT: Always try to use tools and give actual results. Don't just list options or ask clarifying questions - make your best attempt to find what the user is looking for. For vague queries like "book adaptations", search by genre (Drama, Fantasy) or search for well-known adaptations.
 - Never say you "can't" do something without trying first. Use the tools creatively.
 
-STYLE-BASED AND SIMILAR MOVIE REQUESTS:
-- "In the style of [director]" or "like [director]" → movies with SIMILAR AESTHETICS but by DIFFERENT directors. Do NOT recommend that director's films.
-- "Movies like [specific movie]" or "similar to [movie]" → prioritize films by DIFFERENT directors. The user already knows the director's other work.
-- Only include 1 film max by the same director, and only if it's exceptionally relevant
-- Example: "Like Interstellar" → recommend Arrival, 2001, Contact, Gravity - NOT Inception, Tenet, The Prestige
-- Example: "Like Wes Anderson" → Jean-Pierre Jeunet, Michel Gondry, Noah Baumbach films
-- Example: "Like Tarantino" → Guy Ritchie, Coen Brothers, Nicolas Winding Refn films`;
+CRITICAL - SIMILAR MOVIE REQUESTS (YOU MUST FOLLOW THIS):
+- When user asks for movies "like X" or "similar to X", you MUST recommend films by DIFFERENT DIRECTORS
+- NEVER give 2+ films by the same director. Maximum 1 film per director in your recommendations.
+- The user already knows the director's other work - they want to discover NEW filmmakers
+- "Like The Dark Knight" → Sicario, Heat, Se7en, Prisoners, The Town - NOT other Nolan films
+- "Like Interstellar" → Arrival, 2001, Contact, Gravity, The Martian - NOT Inception or Tenet
+- "In the style of [director]" → films with similar aesthetics by COMPLETELY DIFFERENT directors
+- This rule is NON-NEGOTIABLE. Violating it makes your recommendations useless.`;
 
     // Build messages for API
     const apiMessages: Anthropic.MessageParam[] = messages.map((m: Message) => ({
