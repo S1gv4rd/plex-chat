@@ -65,6 +65,52 @@ async function webSearch(query: string, maxResults: number = 5): Promise<string>
   }
 }
 
+// Letterboxd rating scraper
+async function getLetterboxdRating(title: string, year?: string): Promise<{ rating: string; url: string } | null> {
+  try {
+    // Convert title to Letterboxd slug format
+    let slug = title
+      .toLowerCase()
+      .replace(/['']/g, "")
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    // Try with year suffix for disambiguation
+    const urls = year
+      ? [`https://letterboxd.com/film/${slug}-${year}/`, `https://letterboxd.com/film/${slug}/`]
+      : [`https://letterboxd.com/film/${slug}/`];
+
+    for (const url of urls) {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        },
+      });
+
+      if (!response.ok) continue;
+
+      const html = await response.text();
+
+      // Look for the rating in the page
+      // Letterboxd shows rating as "X.XX out of 5" or in meta tags
+      const ratingMatch = html.match(/itemprop="ratingValue"[^>]*>([0-9.]+)</i) ||
+                          html.match(/content="([0-9.]+)"[^>]*itemprop="ratingValue"/i) ||
+                          html.match(/"ratingValue":\s*"?([0-9.]+)"?/i);
+
+      if (ratingMatch) {
+        const rating = parseFloat(ratingMatch[1]);
+        return { rating: `${rating.toFixed(1)}/5`, url };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Letterboxd lookup error:", error);
+    return null;
+  }
+}
+
 // OMDB API for movie details (optional - requires free API key)
 let omdbApiKey: string | null = null;
 
@@ -73,9 +119,18 @@ export function setOmdbApiKey(key: string | null) {
 }
 
 async function lookupMovieExternal(title: string, year?: string): Promise<string> {
+  // Always try to get Letterboxd rating
+  const letterboxdPromise = getLetterboxdRating(title, year);
+
   if (!omdbApiKey) {
-    // Fallback to web search if no OMDB key
-    return webSearch(`${title} ${year || ""} movie review rating`);
+    // If no OMDB key, just get Letterboxd + web search
+    const letterboxd = await letterboxdPromise;
+    let result = "";
+    if (letterboxd) {
+      result += `**Letterboxd:** ${letterboxd.rating}\n\n`;
+    }
+    const webResults = await webSearch(`${title} ${year || ""} movie review rating`);
+    return result + webResults;
   }
 
   try {
@@ -86,10 +141,18 @@ async function lookupMovieExternal(title: string, year?: string): Promise<string
     });
     if (year) params.set("y", year);
 
-    const response = await fetch(`https://www.omdbapi.com/?${params}`);
-    const data = await response.json();
+    const [omdbResponse, letterboxd] = await Promise.all([
+      fetch(`https://www.omdbapi.com/?${params}`),
+      letterboxdPromise,
+    ]);
+
+    const data = await omdbResponse.json();
 
     if (data.Response === "False") {
+      // Still show Letterboxd if we have it
+      if (letterboxd) {
+        return `**${title}** - Letterboxd: ${letterboxd.rating}\n\nCouldn't find other external info.`;
+      }
       return `Could not find external info for "${title}".`;
     }
 
@@ -102,11 +165,15 @@ async function lookupMovieExternal(title: string, year?: string): Promise<string
     result += `\n`;
     if (data.Plot) result += `**Plot:** ${data.Plot}\n\n`;
 
+    result += `**Ratings:**\n`;
     if (data.Ratings && data.Ratings.length > 0) {
-      result += `**Ratings:**\n`;
       for (const rating of data.Ratings) {
         result += `- ${rating.Source}: ${rating.Value}\n`;
       }
+    }
+    // Add Letterboxd rating
+    if (letterboxd) {
+      result += `- Letterboxd: ${letterboxd.rating}\n`;
     }
 
     if (data.Awards && data.Awards !== "N/A") {
@@ -119,7 +186,12 @@ async function lookupMovieExternal(title: string, year?: string): Promise<string
     return result;
   } catch (error) {
     console.error("OMDB lookup error:", error);
-    return webSearch(`${title} ${year || ""} movie information`);
+    const letterboxd = await letterboxdPromise;
+    let result = "";
+    if (letterboxd) {
+      result += `**Letterboxd:** ${letterboxd.rating}\n\n`;
+    }
+    return result + await webSearch(`${title} ${year || ""} movie information`);
   }
 }
 
@@ -345,7 +417,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "lookup_movie_external",
-    description: "Look up detailed external information about a movie including IMDB/Rotten Tomatoes ratings, box office, awards, and full plot. Use when the user asks about a movie they might not have, wants external ratings, or asks 'is X any good?', 'should I watch X?', or wants more info about a movie not in their library.",
+    description: "Look up detailed external information about a movie including IMDB, Rotten Tomatoes, and Letterboxd ratings, plus box office, awards, and full plot. Use when the user asks about a movie they might not have, wants external ratings (including Letterboxd scores), or asks 'is X any good?', 'should I watch X?', 'what's the Letterboxd rating?', or wants more info about a movie not in their library.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -706,8 +778,8 @@ Guidelines:
 
 WEB SEARCH CAPABILITIES:
 - Use web_search to find information not in the library - reviews, news, actor info, upcoming movies, release dates
-- Use lookup_movie_external to get IMDB/Rotten Tomatoes ratings, box office data, and awards for any movie
-- If user asks "is X good?", "should I watch X?", or wants info about a movie not in their library, use these tools
+- Use lookup_movie_external to get IMDB, Rotten Tomatoes, AND Letterboxd ratings, plus box office data and awards
+- If user asks "is X good?", "should I watch X?", "Letterboxd score", or wants info about a movie not in their library, use lookup_movie_external
 - You can now answer general entertainment questions, find reviews, and research movies before recommending them
 
 SIMILAR MOVIES: Each recommendation must be by a DIFFERENT director. Check before responding.
