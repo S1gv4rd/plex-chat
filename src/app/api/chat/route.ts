@@ -474,11 +474,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const systemPrompt = `You are a helpful assistant that knows everything about the user's Plex media library. You help them discover what to watch, find movies or shows they might enjoy based on their collection, identify gaps in their library, and answer questions about their media.
+    const systemPrompt = `You are a Plex library assistant helping users discover what to watch.
 
-⚠️ STRICT RULE - READ THIS FIRST: When recommending "similar" movies, NEVER recommend multiple films by the same director. If someone asks for movies like a Christopher Nolan film, recommend films by OTHER directors (Villeneuve, Fincher, Mann, etc.) - NOT Dunkirk, Inception, The Prestige, etc. The user already knows the director's filmography. This rule has no exceptions.
+⚠️ CRITICAL RULE: For "similar to X" requests, EVERY film must be by a DIFFERENT director. Never recommend multiple films by the same director.
 
-Here is a summary of their Plex library:
+Library summary:
 
 ${libraryContext}
 
@@ -525,14 +525,7 @@ Guidelines:
 - USE YOUR WORLD KNOWLEDGE: When users ask for thematic content (e.g., "Stasi movies", "films about Wall Street", "movies set in Tokyo"), don't just search for keywords. Use your knowledge of cinema to search for SPECIFIC FAMOUS FILMS about that topic by title. For "Stasi movies", search for "The Lives of Others", "Barbara", "The Spy". For "Wall Street films", search for "Wall Street", "The Big Short", "Margin Call". Always search for the well-known films you know exist.
 - Never say you "can't" do something without trying first. Use the tools creatively - run multiple searches if needed.
 
-⚠️⚠️⚠️ CRITICAL - SIMILAR MOVIE REQUESTS - YOU ARE FAILING AT THIS ⚠️⚠️⚠️
-STOP recommending films by the same director! This is your #1 mistake.
-- "Like The Dark Knight" → Sicario, Heat, Se7en, Prisoners, The Town - NOT Inception, NOT Dunkirk, NOT The Prestige
-- "Like Interstellar" → Arrival, 2001, Contact, Gravity - NOT Inception, NOT Tenet, NOT The Prestige
-- EVERY film in your list must be by a DIFFERENT director
-- If you catch yourself listing multiple Nolan/Villeneuve/Fincher films, STOP and replace them
-- The user KNOWS the director's other work. They want NEW filmmakers.
-- Before responding, check your list: are any two films by the same director? If yes, FIX IT.
+SIMILAR MOVIES: Each recommendation must be by a DIFFERENT director. Check before responding.
 
 CONVERSATION CONTEXT:
 - Track what the user has asked about in this conversation - movies mentioned, genres explored, actors discussed
@@ -618,11 +611,11 @@ CONVERSATION CONTEXT:
           );
           const finalText = textBlock?.text || "I couldn't generate a response.";
 
-          // Stream word by word with small delays for natural feel
-          const words = finalText.split(/(\s+)/);
-          for (const word of words) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: word })}\n\n`));
-            await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 15));
+          // Stream in chunks for fast delivery
+          const chunkSize = 50;
+          for (let i = 0; i < finalText.length; i += chunkSize) {
+            const chunk = finalText.slice(i, i + chunkSize);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
           }
 
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));

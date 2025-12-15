@@ -110,6 +110,27 @@ async function getLibraries(): Promise<PlexLibrary[]> {
   return libraries;
 }
 
+// Cached filtered library helpers to avoid repeated filtering
+async function getMovieLibraries(): Promise<PlexLibrary[]> {
+  const libraries = await getLibraries();
+  return libraries.filter(lib => lib.type === "movie");
+}
+
+async function getShowLibraries(): Promise<PlexLibrary[]> {
+  const libraries = await getLibraries();
+  return libraries.filter(lib => lib.type === "show");
+}
+
+// Shared Fisher-Yates shuffle utility
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 function parseMediaItems(items: any[]): PlexMediaItem[] {
   if (!items) return [];
   return items.map((item: any) => ({
