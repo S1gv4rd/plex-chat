@@ -5,6 +5,7 @@ import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import LibraryStats from "@/components/LibraryStats";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
+import Settings, { getSettings } from "@/components/Settings";
 import { PlexLibrarySummary } from "@/lib/plex";
 
 interface Message {
@@ -44,6 +45,7 @@ export default function Home() {
   const [librarySummary, setLibrarySummary] = useState<PlexLibrarySummary | null>(null);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load chat history from localStorage on mount
@@ -62,13 +64,29 @@ export default function Home() {
     }
   }, [messages, historyLoaded]);
 
-  useEffect(() => {
-    // Fetch library summary in background - don't block UI
-    fetch("/api/library")
+  const fetchLibrary = useCallback(() => {
+    const settings = getSettings();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+    fetch("/api/library", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        plexUrl: settings.plexUrl || undefined,
+        plexToken: settings.plexToken || undefined,
+      }),
+    })
       .then(res => res.ok ? res.json() : Promise.reject())
-      .then(setLibrarySummary)
+      .then(data => {
+        setLibrarySummary(data);
+        setLibraryError(null);
+      })
       .catch(() => setLibraryError("Could not connect to Plex server."));
   }, []);
+
+  useEffect(() => {
+    fetchLibrary();
+  }, [fetchLibrary]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -85,10 +103,16 @@ export default function Home() {
     setLoadingStatus(null);
 
     try {
+      const settings = getSettings();
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+          plexUrl: settings.plexUrl || undefined,
+          plexToken: settings.plexToken || undefined,
+          anthropicKey: settings.anthropicKey || undefined,
+        }),
       });
 
       if (!response.ok) throw new Error();
@@ -188,7 +212,7 @@ export default function Home() {
             </div>
             <span className="text-base font-medium text-foreground">Plex Chat</span>
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => sendMessage("Spin the wheel!")}
               disabled={isLoading || !!libraryError}
@@ -196,6 +220,16 @@ export default function Home() {
               title="Random movie picker"
             >
               🎲
+            </button>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all"
+              title="Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
             </button>
             <LibraryStats summary={librarySummary} error={libraryError} />
           </div>
@@ -254,6 +288,13 @@ export default function Home() {
           </form>
         </div>
       </main>
+
+      {/* Settings Modal */}
+      <Settings
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSave={fetchLibrary}
+      />
     </div>
   );
 }

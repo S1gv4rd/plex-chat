@@ -1,10 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails, pickRandomMovie } from "@/lib/plex";
+import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, getUnwatchedShows, searchByGenre, getWatchHistory, getWatchStats, getWatchlist, getSimilarMovies, getCollections, getCollectionItems, getMediaDetails, pickRandomMovie, setCustomCredentials } from "@/lib/plex";
 import { NextRequest } from "next/server";
 
-const anthropic = new Anthropic({
+// Default client using env var
+let anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+function getAnthropicClient(customKey?: string): Anthropic {
+  if (customKey) {
+    return new Anthropic({ apiKey: customKey });
+  }
+  return anthropic;
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -456,11 +464,19 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages } = await request.json();
+    const { messages, plexUrl, plexToken, anthropicKey } = await request.json();
 
     if (!messages || !Array.isArray(messages)) {
       return Response.json({ error: "Messages are required" }, { status: 400 });
     }
+
+    // Set custom Plex credentials if provided
+    if (plexUrl || plexToken) {
+      setCustomCredentials(plexUrl, plexToken);
+    }
+
+    // Get Anthropic client (custom or default)
+    const client = getAnthropicClient(anthropicKey);
 
     // Get Plex library context
     let libraryContext: string;
@@ -547,7 +563,7 @@ CONVERSATION CONTEXT:
       async start(controller) {
         try {
           // Initial API call
-          let response = await anthropic.messages.create({
+          let response = await client.messages.create({
             model: "claude-haiku-4-5-20251001",
             max_tokens: 1024,
             system: systemPrompt,
@@ -593,7 +609,7 @@ CONVERSATION CONTEXT:
             // Keep loading indicator without text
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
 
-            response = await anthropic.messages.create({
+            response = await client.messages.create({
               model: "claude-haiku-4-5-20251001",
               max_tokens: 1024,
               system: systemPrompt,

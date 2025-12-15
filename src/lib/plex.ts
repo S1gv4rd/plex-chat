@@ -1,7 +1,16 @@
 // Plex API client with caching and optimized fetching
 
-const PLEX_URL = process.env.PLEX_URL;
-const PLEX_TOKEN = process.env.PLEX_TOKEN;
+let PLEX_URL = process.env.PLEX_URL;
+let PLEX_TOKEN = process.env.PLEX_TOKEN;
+
+// Allow setting custom credentials at runtime
+export function setCustomCredentials(url?: string, token?: string): void {
+  if (url) PLEX_URL = url;
+  if (token) PLEX_TOKEN = token;
+  // Clear cache when credentials change
+  cache.clear();
+  librariesCache = null;
+}
 
 // Cache TTLs (in milliseconds)
 const CACHE_TTL = {

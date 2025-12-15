@@ -1,11 +1,27 @@
-import { getLibrarySummary, warmupCache, isCacheWarmedUp } from "@/lib/plex";
+import { getLibrarySummary, warmupCache, isCacheWarmedUp, setCustomCredentials } from "@/lib/plex";
+import { NextRequest } from "next/server";
 
 export async function GET() {
+  return handleRequest();
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    if (body.plexUrl || body.plexToken) {
+      setCustomCredentials(body.plexUrl, body.plexToken);
+    }
+  } catch {
+    // No body or invalid JSON, use defaults
+  }
+  return handleRequest();
+}
+
+async function handleRequest() {
   try {
     const summary = await getLibrarySummary();
 
     // Trigger full cache warmup in background after returning summary
-    // This pre-fetches all library content for faster subsequent queries
     if (!isCacheWarmedUp()) {
       warmupCache().catch(console.error);
     }
