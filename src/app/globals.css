@@ -80,6 +80,13 @@ input, textarea, select {
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
+/* Allow text selection in chat messages */
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* Glass effect */
 .glass {
   background: rgba(255, 255, 255, 0.03);

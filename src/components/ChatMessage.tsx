@@ -21,7 +21,7 @@ const ChatMessage = memo(function ChatMessage({ role, content, isStreaming }: Ch
             : "bg-white/5 text-foreground rounded-bl-md"
         }`}
       >
-        <div className={`text-sm leading-relaxed ${isUser ? "" : "text-foreground/90"}`}>
+        <div className={`text-sm leading-relaxed selectable ${isUser ? "" : "text-foreground/90"}`}>
           {isUser ? (
             <p className="m-0">{content}</p>
           ) : (
