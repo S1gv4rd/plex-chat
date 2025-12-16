@@ -5,16 +5,36 @@ import { ChatRequestSchema } from "@/lib/schemas";
 import { tools } from "@/lib/tools";
 import { processToolCall, setExternalConfig } from "@/lib/tool-processor";
 
-// Simple in-memory rate limiter
+// Simple in-memory rate limiter with lazy cleanup
 const RATE_LIMIT = {
   windowMs: 60 * 1000, // 1 minute window
   maxRequests: 10, // max requests per window
+  cleanupThreshold: 100, // Clean up when map exceeds this size
 };
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+let lastCleanupTime = 0;
+
+function cleanupExpiredEntries() {
+  const now = Date.now();
+  // Only cleanup if enough time has passed or map is too large
+  if (now - lastCleanupTime < 30000 && rateLimitMap.size < RATE_LIMIT.cleanupThreshold) {
+    return;
+  }
+  lastCleanupTime = now;
+  for (const [ip, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetTime) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}
 
 function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
   const now = Date.now();
+
+  // Lazy cleanup on each request (efficient - only when needed)
+  cleanupExpiredEntries();
+
   const entry = rateLimitMap.get(ip);
 
   if (!entry || now > entry.resetTime) {
@@ -29,16 +49,6 @@ function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
   entry.count++;
   return { allowed: true };
 }
-
-// Clean up old entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of rateLimitMap.entries()) {
-    if (now > entry.resetTime) {
-      rateLimitMap.delete(ip);
-    }
-  }
-}, 60 * 1000);
 
 // CSRF protection - verify origin matches host
 function verifyCsrf(request: NextRequest): boolean {
@@ -594,11 +604,23 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Chat API error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const rawMessage = error instanceof Error ? error.message : "Unknown error";
+
+    // Sanitize error message to remove potential API keys or sensitive data
+    const sanitizeError = (msg: string): string => {
+      // Remove anything that looks like an API key (long alphanumeric strings)
+      let sanitized = msg.replace(/\b(sk-[a-zA-Z0-9-_]{20,})\b/g, "[API_KEY_REDACTED]");
+      sanitized = sanitized.replace(/\b([a-zA-Z0-9]{32,})\b/g, "[KEY_REDACTED]");
+      // Remove URL query parameters that might contain tokens
+      sanitized = sanitized.replace(/[?&](token|key|apikey|api_key)=[^&\s]*/gi, "?[PARAM_REDACTED]");
+      return sanitized;
+    };
+
+    const errorMessage = sanitizeError(rawMessage);
 
     // Determine error code based on error type
     let code = "INTERNAL_ERROR";
-    if (errorMessage.includes("Anthropic") || errorMessage.includes("API")) {
+    if (rawMessage.includes("Anthropic") || rawMessage.includes("API")) {
       code = "ANTHROPIC_API_ERROR";
     }
 

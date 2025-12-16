@@ -135,6 +135,18 @@ const initialState: ChatState = {
 export function useChat() {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const historyLoadedRef = useRef(false);
+  // Refs for values needed in callbacks to avoid stale closures
+  const messagesRef = useRef(state.messages);
+  const isLoadingRef = useRef(state.isLoading);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    messagesRef.current = state.messages;
+  }, [state.messages]);
+
+  useEffect(() => {
+    isLoadingRef.current = state.isLoading;
+  }, [state.isLoading]);
 
   // Load chat history on mount
   useEffect(() => {
@@ -220,14 +232,15 @@ export function useChat() {
 
   // Send message
   const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || state.isLoading) return;
+    // Use refs to get current values and avoid stale closures
+    if (!content.trim() || isLoadingRef.current) return;
 
     const userMessage: Message = { id: generateId(), role: "user", content: content.trim() };
     dispatch({ type: "ADD_MESSAGE", payload: userMessage });
     dispatch({ type: "START_SENDING" });
 
     try {
-      const response = await attemptRequest(state.messages, userMessage, 0);
+      const response = await attemptRequest(messagesRef.current, userMessage, 0);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -246,13 +259,21 @@ export function useChat() {
 
       const decoder = new TextDecoder();
       let fullContent = "";
+      let buffer = ""; // Buffer for incomplete lines across chunk boundaries
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split("\n")) {
+        buffer += chunk;
+
+        // Process complete lines only
+        const lines = buffer.split("\n");
+        // Keep the last potentially incomplete line in buffer
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") break;
@@ -275,11 +296,26 @@ export function useChat() {
         }
       }
 
+      // Process any remaining data in buffer
+      if (buffer.startsWith("data: ")) {
+        const data = buffer.slice(6);
+        if (data !== "[DONE]" && data.trim()) {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.text) {
+              fullContent += parsed.text;
+            }
+          } catch {
+            // Ignore incomplete final chunk
+          }
+        }
+      }
+
       dispatch({ type: "FINISH_SENDING", payload: { content: fullContent } });
     } catch (error) {
       dispatch({ type: "FINISH_SENDING_ERROR", payload: { errorMessage: getErrorMessage(error) } });
     }
-  }, [state.messages, state.isLoading, attemptRequest, getErrorMessage]);
+  }, [attemptRequest, getErrorMessage]);
 
   // Clear chat
   const clearChat = useCallback(() => {

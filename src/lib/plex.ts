@@ -169,68 +169,79 @@ export async function getLibraryContext(): Promise<string> {
 
 // Pre-fetch and warm up the cache
 export async function warmupCache(): Promise<void> {
-  // Prevent multiple simultaneous warmups
+  // Check if already warmed up
+  if (isCacheWarmedUp()) {
+    return;
+  }
+
+  // Check for existing warmup in progress
   const existingPromise = getWarmupPromise();
   if (existingPromise) {
     return existingPromise;
   }
 
-  if (isCacheWarmedUp()) {
-    return;
-  }
+  // Create and register the promise SYNCHRONOUSLY before any async work
+  // This prevents race conditions where two calls both pass the check above
+  let resolveWarmup: () => void;
+  let rejectWarmup: (error: unknown) => void;
+  const warmupPromise = new Promise<void>((resolve, reject) => {
+    resolveWarmup = resolve;
+    rejectWarmup = reject;
+  });
 
-  const warmupPromise = (async () => {
-    try {
-      logDebug("[Plex Cache] Starting cache warmup...");
-      const startTime = Date.now();
-
-      // 1. Fetch libraries first (needed for other calls)
-      const libraries = await getLibraries();
-      logDebug(`[Plex Cache] Loaded ${libraries.length} libraries`);
-
-      // 2. Pre-fetch library summary (counts, recent, on deck)
-      const summary = await getLibrarySummary();
-      logDebug(
-        `[Plex Cache] Summary: ${summary.totalMovies} movies, ${summary.totalShows} shows`
-      );
-
-      // 3. Pre-fetch all library content in parallel (for faster searches)
-      const contentFetches = libraries.flatMap((lib) => {
-        if (lib.type === "movie" || lib.type === "show") {
-          return [
-            plexFetch(
-              `/library/sections/${lib.key}/all`,
-              CACHE_TTL.LIBRARY_CONTENT
-            ).catch((e) => {
-              logPlexError(`warmupCache content for ${lib.title}`, e);
-              return null;
-            }),
-            plexFetch(
-              `/library/sections/${lib.key}/collections`,
-              CACHE_TTL.LIBRARY_CONTENT
-            ).catch((e) => {
-              logPlexError(`warmupCache collections for ${lib.title}`, e);
-              return null;
-            }),
-          ];
-        }
-        return [];
-      });
-
-      await Promise.all(contentFetches);
-
-      setCacheWarmedUp(true);
-      const elapsed = Date.now() - startTime;
-      logDebug(`[Plex Cache] Warmup complete in ${elapsed}ms`);
-    } catch (error) {
-      console.error("[Plex Cache] Warmup failed:", error);
-    } finally {
-      setWarmupPromise(null);
-    }
-  })();
-
+  // Set immediately to prevent concurrent warmups
   setWarmupPromise(warmupPromise);
-  return warmupPromise;
+
+  // Now do the async work
+  try {
+    logDebug("[Plex Cache] Starting cache warmup...");
+    const startTime = Date.now();
+
+    // 1. Fetch libraries first (needed for other calls)
+    const libraries = await getLibraries();
+    logDebug(`[Plex Cache] Loaded ${libraries.length} libraries`);
+
+    // 2. Pre-fetch library summary (counts, recent, on deck)
+    const summary = await getLibrarySummary();
+    logDebug(
+      `[Plex Cache] Summary: ${summary.totalMovies} movies, ${summary.totalShows} shows`
+    );
+
+    // 3. Pre-fetch all library content in parallel (for faster searches)
+    const contentFetches = libraries.flatMap((lib) => {
+      if (lib.type === "movie" || lib.type === "show") {
+        return [
+          plexFetch(
+            `/library/sections/${lib.key}/all`,
+            CACHE_TTL.LIBRARY_CONTENT
+          ).catch((e) => {
+            logPlexError(`warmupCache content for ${lib.title}`, e);
+            return null;
+          }),
+          plexFetch(
+            `/library/sections/${lib.key}/collections`,
+            CACHE_TTL.LIBRARY_CONTENT
+          ).catch((e) => {
+            logPlexError(`warmupCache collections for ${lib.title}`, e);
+            return null;
+          }),
+        ];
+      }
+      return [];
+    });
+
+    await Promise.all(contentFetches);
+
+    setCacheWarmedUp(true);
+    const elapsed = Date.now() - startTime;
+    logDebug(`[Plex Cache] Warmup complete in ${elapsed}ms`);
+    resolveWarmup!();
+  } catch (error) {
+    console.error("[Plex Cache] Warmup failed:", error);
+    rejectWarmup!(error);
+  } finally {
+    setWarmupPromise(null);
+  }
 }
 
 // Check if two titles are from the same franchise (sequels, prequels, etc.)

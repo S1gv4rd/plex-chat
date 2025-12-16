@@ -40,6 +40,9 @@ export function setCustomCredentials(url?: string, token?: string): void {
   clearCache();
 }
 
+// Default timeout for Plex API requests (10 seconds)
+const PLEX_FETCH_TIMEOUT = 10000;
+
 export async function plexFetch(
   endpoint: string,
   ttl = CACHE_TTL.DEFAULT
@@ -59,6 +62,7 @@ export async function plexFetch(
       Accept: "application/json",
       "X-Plex-Token": PLEX_TOKEN,
     },
+    signal: AbortSignal.timeout(PLEX_FETCH_TIMEOUT),
   });
 
   if (!response.ok) {
@@ -66,8 +70,14 @@ export async function plexFetch(
   }
 
   const data = await response.json();
-  setCache(cacheKey, data, ttl);
-  return data;
+
+  // Validate response has expected structure
+  if (data && typeof data === "object") {
+    setCache(cacheKey, data, ttl);
+    return data;
+  }
+
+  return null;
 }
 
 // Cached libraries fetch
