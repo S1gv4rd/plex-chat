@@ -16,15 +16,8 @@ function formatNumber(num: number): string {
 }
 
 const LibraryStats = memo(function LibraryStats({ summary, error }: LibraryStatsProps) {
-  if (error) {
-    return (
-      <div className="hidden sm:block">
-        <span className="text-xs text-red-400/80 bg-red-900/20 px-2 py-1 rounded-md">Offline</span>
-      </div>
-    );
-  }
-
-  if (!summary) return null;
+  // Don't show anything when offline - the banner already indicates this
+  if (error || !summary) return null;
 
   return (
     <div className="hidden sm:flex items-center gap-1 text-xs text-foreground/50">
