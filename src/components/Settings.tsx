@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { encryptSettings, decryptSettings, clearCryptoKeys } from "@/lib/crypto";
 import { isValidUrl, isValidPlexToken, isValidAnthropicKey, isValidOmdbKey } from "@/lib/utils";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 
 interface SettingsProps {
   isOpen: boolean;
@@ -65,24 +66,9 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
-  const [visible, setVisible] = useState(false);
-  const [shouldRender, setShouldRender] = useState(false);
+  const { visible, shouldRender } = useModalAnimation(isOpen);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
-
-  // Handle open/close animations
-  useEffect(() => {
-    if (isOpen) {
-      setShouldRender(true);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true));
-      });
-    } else {
-      setVisible(false);
-      const timer = setTimeout(() => setShouldRender(false), 200);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
 
   // Validate all fields and return true if valid
   const validate = useCallback((): boolean => {

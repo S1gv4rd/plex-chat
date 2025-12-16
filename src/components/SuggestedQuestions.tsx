@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, memo, useCallback } from "react";
+import { useState, memo, useCallback, useRef, useEffect } from "react";
 import { shuffle } from "@/lib/utils";
 
 interface SuggestedQuestionsProps {
@@ -54,12 +54,20 @@ const defaultSuggestions = [
 ];
 
 const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
-  // Start with first 3 items (deterministic for SSR), then shuffle on client
+  // Track if initial shuffle has happened
+  const hasShuffled = useRef(false);
+
+  // Initialize with deterministic first 3 for SSR
   const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 3));
 
-  // Shuffle only on client after mount to avoid hydration mismatch
+  // Shuffle after mount (client-side only)
+  // This is intentional: we need to shuffle on first render for client-side randomization
   useEffect(() => {
-    setItems(shuffle(defaultSuggestions).slice(0, 3));
+    if (!hasShuffled.current) {
+      hasShuffled.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setItems(shuffle(defaultSuggestions).slice(0, 3));
+    }
   }, []);
 
   const refresh = useCallback(() => {

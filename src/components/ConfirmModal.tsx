@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -23,23 +24,8 @@ export default function ConfirmModal({
   onCancel,
   destructive = false,
 }: ConfirmModalProps) {
-  const [visible, setVisible] = useState(false);
-  const [shouldRender, setShouldRender] = useState(false);
+  const { visible, shouldRender } = useModalAnimation(isOpen);
   const cancelRef = useRef<HTMLButtonElement>(null);
-
-  // Handle open/close animations
-  useEffect(() => {
-    if (isOpen) {
-      setShouldRender(true);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true));
-      });
-    } else {
-      setVisible(false);
-      const timer = setTimeout(() => setShouldRender(false), 200);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
 
   // Focus cancel button and handle escape
   useEffect(() => {

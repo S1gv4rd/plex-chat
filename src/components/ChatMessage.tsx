@@ -11,9 +11,14 @@ interface ChatMessageProps {
 
 const ChatMessage = memo(function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
   const isUser = role === "user";
+  const roleLabel = isUser ? "You" : "Plex Assistant";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3 chat-message ${!isStreaming ? "animate-message-in" : ""}`}>
+    <div
+      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3 chat-message ${!isStreaming ? "animate-message-in" : ""}`}
+      role="article"
+      aria-label={`Message from ${roleLabel}`}
+    >
       <div
         className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 ${
           isUser
@@ -21,7 +26,14 @@ const ChatMessage = memo(function ChatMessage({ role, content, isStreaming }: Ch
             : "bg-white/5 text-foreground rounded-bl-md"
         }`}
       >
-        <div className={`text-sm leading-relaxed ${isUser ? "" : "text-foreground/90"}`}>
+        {/* Screen reader only label */}
+        <span className="sr-only">{roleLabel} says: </span>
+
+        <div
+          className={`text-sm leading-relaxed ${isUser ? "" : "text-foreground/90"}`}
+          aria-live={isStreaming ? "polite" : undefined}
+          aria-atomic={isStreaming ? "false" : undefined}
+        >
           {isUser ? (
             <p className="m-0">{content}</p>
           ) : (
@@ -41,7 +53,10 @@ const ChatMessage = memo(function ChatMessage({ role, content, isStreaming }: Ch
             </ReactMarkdown>
           )}
           {isStreaming && (
-            <span className="streaming-cursor inline-block w-0.5 h-4 bg-plex-orange ml-0.5 rounded-full" />
+            <span
+              className="streaming-cursor inline-block w-0.5 h-4 bg-plex-orange ml-0.5 rounded-full"
+              aria-hidden="true"
+            />
           )}
         </div>
       </div>

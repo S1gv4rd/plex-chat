@@ -1,5 +1,6 @@
 import { getLibrarySummary, warmupCache, isCacheWarmedUp, setCustomCredentials } from "@/lib/plex";
 import { NextRequest } from "next/server";
+import { LibraryRequestSchema } from "@/lib/schemas";
 
 export async function GET() {
   return handleRequest();
@@ -8,8 +9,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    if (body.plexUrl || body.plexToken) {
-      setCustomCredentials(body.plexUrl, body.plexToken);
+    const validation = LibraryRequestSchema.safeParse(body);
+
+    if (validation.success) {
+      const { plexUrl, plexToken } = validation.data;
+      if (plexUrl || plexToken) {
+        setCustomCredentials(plexUrl, plexToken);
+      }
     }
   } catch {
     // No body or invalid JSON, use defaults

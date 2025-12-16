@@ -130,13 +130,24 @@ function isCryptoAvailable(): boolean {
          typeof indexedDB !== "undefined";
 }
 
+// Security warning flag - track if we've warned about fallback mode
+let hasWarnedAboutFallback = false;
+
 // Encrypt a string value
 export async function encryptValue(plaintext: string): Promise<string> {
   if (!plaintext) return "";
 
   // Fallback for environments without crypto support (e.g., some browsers in HTTP)
   if (!isCryptoAvailable()) {
-    console.warn("Web Crypto not available, storing as base64 (not encrypted)");
+    if (!hasWarnedAboutFallback) {
+      hasWarnedAboutFallback = true;
+      console.warn(
+        "[SECURITY WARNING] Web Crypto API not available. " +
+        "Credentials will be stored as base64 encoding (NOT encrypted). " +
+        "This provides NO security - credentials can be easily decoded. " +
+        "For secure storage, ensure you're using HTTPS and a modern browser."
+      );
+    }
     return `b64:${btoa(plaintext)}`;
   }
 
