@@ -62,9 +62,27 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [omdbKey, setOmdbKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [visible, setVisible] = useState(false);
+  const [shouldRender, setShouldRender] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle open/close animations
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+    } else {
+      setVisible(false);
+      const timer = setTimeout(() => setShouldRender(false), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   // Validate all fields and return true if valid
   const validate = useCallback((): boolean => {
@@ -108,8 +126,42 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
       loadSettings();
       setSaved(false);
       setErrors({});
+      setTestResult(null);
     }
   }, [isOpen, loadSettings]);
+
+  // Test connection to Plex server
+  const testConnection = useCallback(async () => {
+    if (!plexUrl || !plexToken) {
+      setTestResult({ success: false, message: "Enter Plex URL and token first" });
+      return;
+    }
+
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const response = await fetch("/api/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plexUrl, plexToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTestResult({
+          success: true,
+          message: `Connected! ${data.totalMovies} movies, ${data.totalShows} shows`,
+        });
+      } else {
+        setTestResult({ success: false, message: "Could not connect to Plex server" });
+      }
+    } catch {
+      setTestResult({ success: false, message: "Connection failed" });
+    } finally {
+      setTesting(false);
+    }
+  }, [plexUrl, plexToken]);
 
   // Handle Escape key to close modal and focus trap
   useEffect(() => {
@@ -179,13 +231,13 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     setSaved(false);
   };
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-200 ${visible ? "opacity-100" : "opacity-0"}`}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -196,7 +248,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className="relative bg-plex-gray border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-xl"
+        className={`relative bg-plex-gray border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-xl transition-all duration-200 ${visible ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
       >
         <div className="flex items-center justify-between mb-6">
           <h2 id="settings-title" className="text-lg font-medium text-foreground">Settings</h2>
@@ -254,6 +306,23 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               <p className="text-xs text-foreground/30 mt-1">
                 Find in Plex Web → Settings → Account → XML
               </p>
+            )}
+          </div>
+
+          {/* Test Connection Button */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={testConnection}
+              disabled={testing || !plexUrl || !plexToken}
+              className="px-3 py-1.5 text-xs rounded-lg border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {testing ? "Testing..." : "Test Connection"}
+            </button>
+            {testResult && (
+              <span className={`text-xs ${testResult.success ? "text-green-400" : "text-red-400"}`}>
+                {testResult.message}
+              </span>
             )}
           </div>
 

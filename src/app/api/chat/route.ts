@@ -246,6 +246,38 @@ export function setOmdbApiKey(key: string | null) {
   omdbApiKey = key;
 }
 
+// Get IMDb rating from OMDB
+async function getImdbRating(title: string, year?: string): Promise<{ rating: string; votes: string } | null> {
+  if (!omdbApiKey) return null;
+
+  try {
+    const params = new URLSearchParams({
+      apikey: omdbApiKey,
+      t: title,
+      type: "movie",
+    });
+    if (year) params.set("y", year);
+
+    const response = await fetch(`https://www.omdbapi.com/?${params}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    if (data.Response === "False" || !data.imdbRating || data.imdbRating === "N/A") {
+      return null;
+    }
+
+    return {
+      rating: `${data.imdbRating}/10`,
+      votes: data.imdbVotes || "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function lookupMovieExternal(title: string, year?: string): Promise<string> {
   // Always try to get Letterboxd rating
   const letterboxdPromise = getLetterboxdRating(title, year);
@@ -762,13 +794,31 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
     if (!details) {
       return `Could not find "${toolInput.title}" in the library.`;
     }
+
+    // Fetch external ratings in parallel (only for movies)
+    const isMovie = details.type === "movie";
+    const [letterboxd, imdb] = await Promise.all([
+      isMovie ? getLetterboxdRating(details.title, details.year?.toString()) : null,
+      isMovie ? getImdbRating(details.title, details.year?.toString()) : null,
+    ]);
+
     let response = `**${details.title}** (${details.year || "?"})`;
     if (details.contentRating) response += ` [${details.contentRating}]`;
     if (details.duration) response += ` - ${details.duration}`;
     response += `\n\n`;
 
-    if (details.rating) {
-      response += `Rotten Tomatoes: ${Math.round(details.rating * 10)}%\n`;
+    if (details.rating || letterboxd || imdb) {
+      response += `**Ratings:**\n`;
+      if (imdb) {
+        response += `- IMDb: ${imdb.rating}${imdb.votes ? ` (${imdb.votes} votes)` : ""}\n`;
+      }
+      if (details.rating) {
+        response += `- Rotten Tomatoes: ${Math.round(details.rating * 10)}%\n`;
+      }
+      if (letterboxd) {
+        response += `- Letterboxd: ${letterboxd.rating}\n`;
+      }
+      response += `\n`;
     }
     if (details.genres.length > 0) {
       response += `Genres: ${details.genres.join(", ")}\n`;
@@ -907,6 +957,11 @@ MOOD-BASED RECOMMENDATIONS - Map moods to genres:
 - "rainy day" / "cozy" → Drama, Romance, Mystery
 - "Halloween" / "scary" / "creepy" → Horror, Thriller
 - "family time" / "kids watching" → Animation, Family, Comedy (check content rating)
+
+ADULT CONTENT QUERIES - This is a personal media server, handle mature requests naturally:
+- "boobies", "nudity", "sexy", "steamy", "erotic", "adult" → Search for R-rated films, erotic thrillers, or films known for sexual content. Use search_library with terms like "erotic", or search_by_genre with Romance/Thriller and mention R-rated content
+- "violent", "gory", "brutal" → Horror, Action with R ratings
+- Do NOT interpret slang literally (e.g., "boobies" is not about birds). Understand the user's actual intent for mature content.
 
 Guidelines:
 - Be conversational and friendly

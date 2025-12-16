@@ -6,6 +6,7 @@ import TypingIndicator from "@/components/TypingIndicator";
 import LibraryStats from "@/components/LibraryStats";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
 import Settings, { getSettingsAsync } from "@/components/Settings";
+import ConfirmModal from "@/components/ConfirmModal";
 import { PlexLibrarySummary } from "@/lib/plex";
 
 interface Message {
@@ -57,9 +58,12 @@ export default function Home() {
   const [loadingStatus, setLoadingStatus] = useState<string | null>(null);
   const [librarySummary, setLibrarySummary] = useState<PlexLibrarySummary | null>(null);
   const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [libraryLoading, setLibraryLoading] = useState(true);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -78,6 +82,7 @@ export default function Home() {
   }, [messages, historyLoaded]);
 
   const fetchLibrary = useCallback(async () => {
+    setLibraryLoading(true);
     try {
       const settings = await getSettingsAsync();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -98,6 +103,8 @@ export default function Home() {
       setLibraryError(null);
     } catch {
       setLibraryError("Could not connect to Plex server.");
+    } finally {
+      setLibraryLoading(false);
     }
   }, []);
 
@@ -108,6 +115,32 @@ export default function Home() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading, streamingContent]);
+
+  // Handle mobile keyboard - keep input visible when keyboard opens
+  useEffect(() => {
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) return;
+
+    const handleResize = () => {
+      // When keyboard opens, visualViewport.height decreases
+      // Scroll input into view with a small delay for keyboard animation
+      if (document.activeElement === inputRef.current) {
+        setTimeout(() => {
+          inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 100);
+      }
+    };
+
+    visualViewport.addEventListener("resize", handleResize);
+    return () => visualViewport.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Reset textarea height when input is cleared
+  useEffect(() => {
+    if (!input && inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+  }, [input]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -251,12 +284,19 @@ export default function Home() {
   }, [input, sendMessage]);
 
   const resetChat = useCallback(() => {
-    if (messages.length > 0 && !window.confirm("Clear chat history?")) {
+    if (messages.length > 0) {
+      setClearConfirmOpen(true);
       return;
     }
     setMessages([]);
     localStorage.removeItem(STORAGE_KEY);
   }, [messages.length]);
+
+  const confirmClearChat = useCallback(() => {
+    setMessages([]);
+    localStorage.removeItem(STORAGE_KEY);
+    setClearConfirmOpen(false);
+  }, []);
 
   return (
     <div className="app-height flex flex-col bg-background">
@@ -315,7 +355,7 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
-            <LibraryStats summary={librarySummary} error={libraryError} />
+            <LibraryStats summary={librarySummary} error={libraryError} loading={libraryLoading} />
           </div>
         </div>
       </header>
@@ -324,16 +364,18 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto px-4 py-4" role="log" aria-live="polite" aria-label="Chat messages">
           {messages.length === 0 && !streamingContent ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <div className="welcome-icon w-16 h-16 bg-plex-orange/10 rounded-2xl flex items-center justify-center mb-5">
+              <div className="welcome-icon w-16 h-16 bg-plex-orange/10 rounded-2xl flex items-center justify-center mb-5 icon-glow animate-fade-in-up">
                 <svg className="w-8 h-8 text-plex-orange" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
                 </svg>
               </div>
-              <h2 className="welcome-title text-xl font-medium mb-2 text-foreground">What would you like to watch?</h2>
-              <p className="welcome-subtitle text-foreground/40 mb-6 max-w-xs text-sm">
+              <h2 className="welcome-title text-xl font-medium mb-2 text-foreground animate-fade-in-up-delay-1">What would you like to watch?</h2>
+              <p className="welcome-subtitle text-foreground/40 mb-6 max-w-xs text-sm animate-fade-in-up-delay-2">
                 Ask for recommendations, search by actor, or explore your library.
               </p>
-              <SuggestedQuestions onSelect={sendMessage} />
+              <div className="animate-fade-in-up-delay-3">
+                <SuggestedQuestions onSelect={sendMessage} />
+              </div>
             </div>
           ) : (
             <>
@@ -351,12 +393,19 @@ export default function Home() {
           <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
             <div className="flex-1 relative">
               <textarea
+                ref={inputRef}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => {
+                  setInput(e.target.value);
+                  // Auto-resize
+                  e.target.style.height = "auto";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder="Message..."
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 pr-12 resize-none focus:outline-none focus:border-plex-orange/50 text-foreground placeholder-foreground/30 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 pr-12 resize-none focus:outline-none focus:border-plex-orange/50 text-foreground placeholder-foreground/30 transition-colors overflow-hidden"
                 rows={1}
+                style={{ minHeight: "48px" }}
                 disabled={isLoading || !!libraryError}
               />
               <button
@@ -378,6 +427,18 @@ export default function Home() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSave={fetchLibrary}
+      />
+
+      {/* Clear Chat Confirmation */}
+      <ConfirmModal
+        isOpen={clearConfirmOpen}
+        title="Clear chat history?"
+        message="This will remove all messages from this conversation. This action cannot be undone."
+        confirmText="Clear"
+        cancelText="Cancel"
+        onConfirm={confirmClearChat}
+        onCancel={() => setClearConfirmOpen(false)}
+        destructive
       />
     </div>
   );

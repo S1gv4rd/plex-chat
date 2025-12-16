@@ -9,77 +9,71 @@ interface SuggestedQuestionsProps {
 
 const defaultSuggestions = [
   // Quick actions
-  "Surprise me",
-  "Spin the wheel",
-  "What should I watch?",
-  "Random pick",
+  "Surprise me with something good",
+  "Pick a random movie for me",
+  "What should I watch tonight?",
+  "I'm feeling lucky, choose for me",
 
-  // Mood
-  "Something funny",
-  "Something intense",
-  "Something relaxing",
-  "Feel-good movie",
-  "Mind-bending",
-  "Edge of my seat",
+  // Mood-based
+  "I need a good laugh tonight",
+  "Something to keep me on the edge of my seat",
+  "I want to feel inspired",
+  "Find me something heartwarming",
+  "I'm in the mood for something mind-bending",
+  "Show me something visually stunning",
 
-  // Context
-  "Date night movie",
-  "Family friendly",
-  "Quick watch",
-  "Lazy Sunday epic",
-  "Solo night in",
+  // Context-based
+  "Perfect movie for a date night",
+  "Something the whole family can enjoy",
+  "A quick movie I can finish in under 90 minutes",
+  "An epic film for a lazy Sunday",
+  "Something light and easy to watch",
 
-  // Genres
-  "Best thrillers",
-  "Sci-fi picks",
-  "Horror movies",
-  "Action classics",
-  "Documentaries",
-  "Animated films",
-  "Crime dramas",
-  "Romantic comedies",
+  // Genre exploration
+  "What are my best unwatched thrillers?",
+  "Show me some classic sci-fi I haven't seen",
+  "Any good horror movies in my library?",
+  "I want to watch a great documentary",
+  "Find me an underrated gem",
 
   // Discovery
-  "Hidden gems",
-  "What's new?",
-  "My collections",
-  "Unwatched favorites",
-  "Award winners",
-  "Foreign films",
+  "What movies have I added recently?",
+  "Show me my collections",
+  "What are the highest rated films I haven't watched?",
+  "Movies similar to what I've enjoyed",
 
-  // TV
-  "What should I binge?",
-  "Best TV shows",
-  "Short series",
-  "Comedy shows",
+  // TV Shows
+  "What's a good show to binge this weekend?",
+  "Short series I can finish quickly",
+  "What TV shows have I been watching?",
 
-  // Stats & Library
-  "My watch stats",
-  "Recently watched",
-  "Most watched genres",
+  // Stats & History
+  "Show me my watching stats",
+  "What have I watched recently?",
+  "What genres do I watch the most?",
 ];
 
 const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: SuggestedQuestionsProps) {
-  // Start with first 4 items (deterministic for SSR), then shuffle on client
-  const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 4));
+  // Start with first 3 items (deterministic for SSR), then shuffle on client
+  const [items, setItems] = useState<string[]>(defaultSuggestions.slice(0, 3));
 
   // Shuffle only on client after mount to avoid hydration mismatch
   useEffect(() => {
-    setItems(shuffle(defaultSuggestions).slice(0, 4));
+    setItems(shuffle(defaultSuggestions).slice(0, 3));
   }, []);
 
   const refresh = useCallback(() => {
-    setItems(shuffle(defaultSuggestions).slice(0, 4));
+    setItems(shuffle(defaultSuggestions).slice(0, 3));
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-3 w-full max-w-md">
-      <div className="flex flex-wrap gap-2 justify-center">
+    <div className="flex flex-col items-center gap-3 w-full max-w-lg">
+      <div className="flex flex-col gap-2 w-full">
         {items.map((q) => (
           <button
             key={q}
             onClick={() => onSelect(q)}
-            className="border text-xs px-3 py-1.5 rounded-full transition-all bg-white/5 border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground"
+            className="border text-sm px-4 py-2.5 rounded-xl transition-all duration-150 bg-white/5 border-white/10 hover:border-plex-orange/40 hover:bg-plex-orange/10 active:scale-[0.98] active:bg-plex-orange/20 text-foreground/70 hover:text-foreground text-left"
           >
             {q}
           </button>
@@ -87,13 +81,13 @@ const SuggestedQuestions = memo(function SuggestedQuestions({ onSelect }: Sugges
       </div>
       <button
         onClick={refresh}
-        className="text-[11px] text-foreground/30 hover:text-foreground/60 transition-colors flex items-center gap-1 group"
+        className="text-xs text-foreground/30 hover:text-foreground/60 transition-colors flex items-center gap-1.5 group"
         aria-label="Show more suggestions"
       >
-        <svg className="w-3 h-3 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        More
+        Show different suggestions
       </button>
     </div>
   );
