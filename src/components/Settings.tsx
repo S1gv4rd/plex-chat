@@ -42,21 +42,10 @@ export async function getSettingsAsync(): Promise<AppSettings> {
   }
 }
 
-// Synchronous getter for initial render (returns empty, actual values loaded async)
-export function getSettings(): AppSettings {
-  return emptySettings;
-}
-
 // Async function to save settings (encrypts before storage)
 export async function saveSettingsAsync(settings: AppSettings): Promise<void> {
   const encrypted = await encryptSettings(settings);
   localStorage.setItem(SETTINGS_KEY, encrypted);
-}
-
-// Legacy sync save (deprecated, use saveSettingsAsync)
-export function saveSettings(settings: AppSettings): void {
-  // Fire and forget - encryption happens async
-  saveSettingsAsync(settings).catch(console.error);
 }
 
 interface ValidationErrors {

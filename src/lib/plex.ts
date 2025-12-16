@@ -187,18 +187,6 @@ async function getLibraries(): Promise<PlexLibrary[]> {
   return libraries;
 }
 
-// Cached filtered library helpers to avoid repeated filtering
-async function getMovieLibraries(): Promise<PlexLibrary[]> {
-  const libraries = await getLibraries();
-  return libraries.filter(lib => lib.type === "movie");
-}
-
-async function getShowLibraries(): Promise<PlexLibrary[]> {
-  const libraries = await getLibraries();
-  return libraries.filter(lib => lib.type === "show");
-}
-
-
 function parseMediaItems(items: (PlexApiMediaItem | PlexApiCollection)[] | undefined): PlexMediaItem[] {
   if (!items) return [];
   // Filter to only media items (not collections) and map
