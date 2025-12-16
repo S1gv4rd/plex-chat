@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { encryptSettings, decryptSettings, clearCryptoKeys } from "@/lib/crypto";
 import { isValidUrl, isValidPlexToken, isValidAnthropicKey, isValidOmdbKey } from "@/lib/utils";
 
@@ -74,6 +74,8 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const modalRef = useRef<HTMLDivElement>(null);
+  const firstInputRef = useRef<HTMLInputElement>(null);
 
   // Validate all fields and return true if valid
   const validate = useCallback((): boolean => {
@@ -120,6 +122,41 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     }
   }, [isOpen, loadSettings]);
 
+  // Handle Escape key to close modal and focus trap
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Focus first input when modal opens
+    firstInputRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      // Focus trap - keep Tab within modal
+      if (e.key === "Tab" && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleSave = async () => {
     if (!validate()) return;
 
@@ -139,6 +176,9 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   };
 
   const handleClear = async () => {
+    if (!window.confirm("Clear all settings? This will remove your API keys and Plex credentials.")) {
+      return;
+    }
     setPlexUrl("");
     setPlexToken("");
     setAnthropicKey("");
@@ -163,6 +203,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
 
       {/* Modal */}
       <div
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
@@ -188,6 +229,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               Plex Server URL
             </label>
             <input
+              ref={firstInputRef}
               type="url"
               value={plexUrl}
               onChange={(e) => setPlexUrl(e.target.value)}

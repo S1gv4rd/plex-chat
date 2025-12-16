@@ -1,10 +1,12 @@
 "use client";
 
+import { memo } from "react";
+
 interface TypingIndicatorProps {
   status?: string;
 }
 
-export default function TypingIndicator({ status }: TypingIndicatorProps) {
+const TypingIndicator = memo(function TypingIndicator({ status }: TypingIndicatorProps) {
   return (
     <div className="flex justify-start mb-3">
       <div className="bg-white/5 rounded-2xl rounded-bl-md px-3 py-2.5">
@@ -22,4 +24,6 @@ export default function TypingIndicator({ status }: TypingIndicatorProps) {
       </div>
     </div>
   );
-}
+});
+
+export default TypingIndicator;

@@ -35,7 +35,7 @@ const CACHE_TTL = {
 };
 
 // Simple in-memory cache with TTL
-const cache = new Map<string, { data: any; expires: number }>();
+const cache = new Map<string, { data: PlexApiResponse; expires: number }>();
 
 // Cache warmup state
 let cacheWarmedUp = false;
@@ -76,6 +76,57 @@ interface PlexLibrarySummary {
   recentlyWatched: PlexMediaItem[];
 }
 
+// Plex API response types
+interface PlexApiTag {
+  tag: string;
+}
+
+interface PlexApiMediaItem {
+  ratingKey: string;
+  title: string;
+  type: string;
+  year?: number;
+  summary?: string;
+  addedAt?: number;
+  lastViewedAt?: number;
+  viewCount?: number;
+  grandparentTitle?: string;
+  parentTitle?: string;
+  index?: number;
+  parentIndex?: number;
+  leafCount?: number;
+  Genre?: PlexApiTag[];
+  Director?: PlexApiTag[];
+  Role?: (PlexApiTag & { role?: string })[];
+  Writer?: PlexApiTag[];
+  duration?: number;
+  rating?: number;
+  contentRating?: string;
+  studio?: string;
+  originallyAvailableAt?: string;
+}
+
+interface PlexApiLibrary {
+  key: string;
+  title: string;
+  type: string;
+}
+
+interface PlexApiCollection {
+  ratingKey: string;
+  title: string;
+  childCount?: number;
+}
+
+interface PlexApiResponse {
+  MediaContainer?: {
+    Directory?: PlexApiLibrary[];
+    Metadata?: (PlexApiMediaItem | PlexApiCollection)[];
+    totalSize?: number;
+    size?: number;
+  };
+}
+
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key);
   if (entry && entry.expires > Date.now()) {
@@ -85,11 +136,11 @@ function getCached<T>(key: string): T | null {
   return null;
 }
 
-function setCache(key: string, data: any, ttl = CACHE_TTL.DEFAULT): void {
+function setCache(key: string, data: PlexApiResponse, ttl = CACHE_TTL.DEFAULT): void {
   cache.set(key, { data, expires: Date.now() + ttl });
 }
 
-async function plexFetch(endpoint: string, ttl = CACHE_TTL.DEFAULT): Promise<any> {
+async function plexFetch(endpoint: string, ttl = CACHE_TTL.DEFAULT): Promise<PlexApiResponse | null> {
   if (!PLEX_URL || !PLEX_TOKEN) {
     throw new Error("Plex URL and Token must be configured");
   }
@@ -123,7 +174,10 @@ async function getLibraries(): Promise<PlexLibrary[]> {
   }
 
   const data = await plexFetch("/library/sections", CACHE_TTL.LIBRARIES);
-  const libraries = data.MediaContainer.Directory.map((lib: any) => ({
+  if (!data?.MediaContainer?.Directory) {
+    return [];
+  }
+  const libraries = data.MediaContainer.Directory.map((lib: PlexApiLibrary) => ({
     key: lib.key,
     title: lib.title,
     type: lib.type,
@@ -145,17 +199,20 @@ async function getShowLibraries(): Promise<PlexLibrary[]> {
 }
 
 
-function parseMediaItems(items: any[]): PlexMediaItem[] {
+function parseMediaItems(items: (PlexApiMediaItem | PlexApiCollection)[] | undefined): PlexMediaItem[] {
   if (!items) return [];
-  return items.map((item: any) => ({
+  // Filter to only media items (not collections) and map
+  return items
+    .filter((item): item is PlexApiMediaItem => "type" in item)
+    .map((item: PlexApiMediaItem) => ({
     ratingKey: item.ratingKey,
     title: item.title,
     type: item.type,
     year: item.year,
     summary: item.summary,
-    genres: item.Genre?.map((g: any) => g.tag),
-    directors: item.Director?.map((d: any) => d.tag),
-    actors: item.Role?.slice(0, 5).map((r: any) => r.tag),
+    genres: item.Genre?.map((g: PlexApiTag) => g.tag),
+    directors: item.Director?.map((d: PlexApiTag) => d.tag),
+    actors: item.Role?.slice(0, 5).map((r: PlexApiTag) => r.tag),
     addedAt: item.addedAt,
     lastViewedAt: item.lastViewedAt,
     viewCount: item.viewCount,
@@ -169,7 +226,7 @@ function parseMediaItems(items: any[]): PlexMediaItem[] {
 
 export async function searchLibrary(query: string): Promise<PlexMediaItem[]> {
   const data = await plexFetch(`/search?query=${encodeURIComponent(query)}`);
-  return parseMediaItems(data.MediaContainer.Metadata);
+  return parseMediaItems(data?.MediaContainer?.Metadata);
 }
 
 export async function searchByPerson(name: string): Promise<{ movies: PlexMediaItem[]; shows: PlexMediaItem[] }> {
@@ -467,7 +524,7 @@ export async function getLibraryContext(): Promise<string> {
     context += `Recently Added:\n`;
     for (const item of summary.recentlyAdded.slice(0, 8)) {
       const name = item.type === "episode"
-        ? `${item.grandparentTitle} S${item.parentIndex}E${item.index}`
+        ? `${item.grandparentTitle || "Unknown"} S${item.parentIndex ?? "?"}E${item.index ?? "?"}`
         : `${item.title} (${item.year || "?"})`;
       context += `- ${name}\n`;
     }
@@ -477,7 +534,7 @@ export async function getLibraryContext(): Promise<string> {
     context += `\nOn Deck:\n`;
     for (const item of summary.recentlyWatched.slice(0, 5)) {
       const name = item.type === "episode"
-        ? `${item.grandparentTitle} S${item.parentIndex}E${item.index}`
+        ? `${item.grandparentTitle || "Unknown"} S${item.parentIndex ?? "?"}E${item.index ?? "?"}`
         : item.title;
       context += `- ${name}\n`;
     }
@@ -712,7 +769,7 @@ export async function getCollections(): Promise<{ key: string; title: string; co
 
   for (const data of responses) {
     if (data?.MediaContainer?.Metadata) {
-      for (const col of data.MediaContainer.Metadata) {
+      for (const col of data.MediaContainer.Metadata as PlexApiCollection[]) {
         collections.push({
           key: col.ratingKey,
           title: col.title,
@@ -733,7 +790,7 @@ export async function getCollectionItems(collectionTitle: string): Promise<PlexM
     try {
       const colData = await plexFetch(`/library/sections/${lib.key}/collections`);
       const collection = colData?.MediaContainer?.Metadata?.find(
-        (c: any) => c.title.toLowerCase() === collectionTitle.toLowerCase()
+        (c: PlexApiCollection) => c.title.toLowerCase() === collectionTitle.toLowerCase()
       );
 
       if (collection) {
@@ -808,7 +865,7 @@ export async function getMediaDetails(title: string): Promise<{
   try {
     // Get full metadata
     const data = await plexFetch(`/library/metadata/${item.ratingKey}`, CACHE_TTL.LIBRARY_CONTENT);
-    const meta = data?.MediaContainer?.Metadata?.[0];
+    const meta = data?.MediaContainer?.Metadata?.[0] as PlexApiMediaItem | undefined;
 
     if (!meta) return null;
 
@@ -837,7 +894,7 @@ export async function getMediaDetails(title: string): Promise<{
       genres: meta.Genre?.map((g: { tag: string }) => g.tag) || [],
       directors: meta.Director?.map((d: { tag: string }) => d.tag) || [],
       writers: meta.Writer?.map((w: { tag: string }) => w.tag) || [],
-      cast: meta.Role?.slice(0, 8).map((r: { tag: string; role: string }) => ({
+      cast: meta.Role?.slice(0, 8).map((r) => ({
         name: r.tag,
         role: r.role || "Unknown role",
       })) || [],

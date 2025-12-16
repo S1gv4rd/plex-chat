@@ -123,9 +123,22 @@ function retrieveKeyFromStorage(): Promise<CryptoKey | null> {
   });
 }
 
+// Check if Web Crypto is available
+function isCryptoAvailable(): boolean {
+  return typeof crypto !== "undefined" &&
+         typeof crypto.subtle !== "undefined" &&
+         typeof indexedDB !== "undefined";
+}
+
 // Encrypt a string value
 export async function encryptValue(plaintext: string): Promise<string> {
   if (!plaintext) return "";
+
+  // Fallback for environments without crypto support (e.g., some browsers in HTTP)
+  if (!isCryptoAvailable()) {
+    console.warn("Web Crypto not available, storing as base64 (not encrypted)");
+    return `b64:${btoa(plaintext)}`;
+  }
 
   try {
     const key = await getOrCreateKey();
@@ -145,15 +158,31 @@ export async function encryptValue(plaintext: string): Promise<string> {
 
     return btoa(String.fromCharCode(...combined));
   } catch (error) {
-    console.error("Encryption failed:", error);
-    // Fallback: return empty to avoid storing plaintext
-    return "";
+    // Log but don't expose error details
+    console.error("Encryption failed, using fallback:", error instanceof Error ? error.message : "Unknown error");
+    // Fallback: base64 encode (better than empty string which loses data)
+    return `b64:${btoa(plaintext)}`;
   }
 }
 
 // Decrypt a string value
 export async function decryptValue(ciphertext: string): Promise<string> {
   if (!ciphertext) return "";
+
+  // Handle base64 fallback values
+  if (ciphertext.startsWith("b64:")) {
+    try {
+      return atob(ciphertext.slice(4));
+    } catch {
+      return "";
+    }
+  }
+
+  // Fallback for environments without crypto support
+  if (!isCryptoAvailable()) {
+    console.warn("Web Crypto not available, cannot decrypt");
+    return "";
+  }
 
   try {
     const key = await getOrCreateKey();
@@ -177,7 +206,8 @@ export async function decryptValue(ciphertext: string): Promise<string> {
 
     return new TextDecoder().decode(decryptedData);
   } catch (error) {
-    console.error("Decryption failed:", error);
+    // Could be wrong key, corrupted data, or tampered ciphertext
+    console.error("Decryption failed:", error instanceof Error ? error.message : "Unknown error");
     return "";
   }
 }

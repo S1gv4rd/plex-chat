@@ -3,6 +3,57 @@ import { getLibraryContext, searchByPerson, searchLibrary, getUnwatchedMovies, g
 import { shuffle } from "@/lib/utils";
 import { NextRequest } from "next/server";
 
+// Simple in-memory rate limiter
+const RATE_LIMIT = {
+  windowMs: 60 * 1000, // 1 minute window
+  maxRequests: 10, // max requests per window
+};
+
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT.windowMs });
+    return { allowed: true };
+  }
+
+  if (entry.count >= RATE_LIMIT.maxRequests) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetTime - now) / 1000) };
+  }
+
+  entry.count++;
+  return { allowed: true };
+}
+
+// Clean up old entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetTime) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, 60 * 1000);
+
+// CSRF protection - verify origin matches host
+function verifyCsrf(request: NextRequest): boolean {
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("host");
+
+  // Allow requests without origin (same-origin requests from some browsers)
+  if (!origin) return true;
+
+  try {
+    const originHost = new URL(origin).host;
+    return originHost === host;
+  } catch {
+    return false;
+  }
+}
+
 // Web search using DuckDuckGo HTML with robust fallback parsing
 async function webSearch(query: string, maxResults: number = 5): Promise<string> {
   const parseStrategies = [
@@ -772,6 +823,23 @@ async function processToolCall(toolName: string, toolInput: Record<string, strin
 }
 
 export async function POST(request: NextRequest) {
+  // CSRF protection
+  if (!verifyCsrf(request)) {
+    return Response.json({ error: "Invalid request origin" }, { status: 403 });
+  }
+
+  // Rate limiting
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+             request.headers.get("x-real-ip") ||
+             "unknown";
+  const rateLimit = checkRateLimit(ip);
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: "Too many requests. Please wait before trying again.", retryAfter: rateLimit.retryAfter },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter) } }
+    );
+  }
+
   try {
     const { messages, plexUrl, plexToken, anthropicKey, omdbKey } = await request.json();
 
