@@ -298,7 +298,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               type="password"
               value={plexToken}
               onChange={(e) => setPlexToken(e.target.value)}
-              placeholder="Your X-Plex-Token"
+              placeholder="Your Plex Token"
               className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
                 errors.plexToken ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
               }`}
