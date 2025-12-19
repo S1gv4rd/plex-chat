@@ -23,8 +23,6 @@ const ChatHeader = memo(function ChatHeader({
   onRandomPick,
   onOpenSettings,
 }: ChatHeaderProps) {
-  const modelLabel = "Gemini";
-
   return (
     <header className="px-4 py-3 safe-top shrink-0 overflow-visible">
       <div className="max-w-2xl mx-auto flex items-center justify-between overflow-visible">
@@ -38,10 +36,7 @@ const ChatHeader = memo(function ChatHeader({
               <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v15A2.5 2.5 0 0 0 4.5 22h15a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 19.5 2h-15Zm7.5 4 5.5 6-5.5 6-1.5-1.5L14 12l-3.5-4.5L12 6Z"/>
             </svg>
           </div>
-          <div className="flex flex-col items-start">
-            <span className="text-base font-medium text-foreground leading-tight">Plex Chat</span>
-            <span className="text-[10px] text-foreground/40 leading-tight">{modelLabel}</span>
-          </div>
+          <span className="text-base font-medium text-foreground">Plex Chat</span>
         </button>
         <div className="flex items-center gap-3">
           <button
