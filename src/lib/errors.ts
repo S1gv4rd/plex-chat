@@ -17,7 +17,7 @@ export const ErrorCode = {
   // External service errors (502/503)
   PLEX_CONNECTION_FAILED: "PLEX_CONNECTION_FAILED",
   PLEX_API_ERROR: "PLEX_API_ERROR",
-  ANTHROPIC_API_ERROR: "ANTHROPIC_API_ERROR",
+  GEMINI_API_ERROR: "GEMINI_API_ERROR",
   EXTERNAL_SERVICE_ERROR: "EXTERNAL_SERVICE_ERROR",
 
   // Internal errors (500)
@@ -85,7 +85,7 @@ export function getErrorResponse(
       status = 502;
       break;
     case ErrorCode.PLEX_API_ERROR:
-    case ErrorCode.ANTHROPIC_API_ERROR:
+    case ErrorCode.GEMINI_API_ERROR:
       status = 503;
       break;
     default:

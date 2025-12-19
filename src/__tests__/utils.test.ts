@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shuffle, isValidUrl, isValidPlexToken, isValidAnthropicKey, isValidOmdbKey } from "@/lib/utils";
+import { shuffle, isValidUrl, isValidPlexToken, isValidGeminiKey, isValidOmdbKey } from "@/lib/utils";
 
 describe("shuffle", () => {
   it("returns an array of the same length", () => {
@@ -74,21 +74,17 @@ describe("isValidPlexToken", () => {
   });
 });
 
-describe("isValidAnthropicKey", () => {
-  it("validates proper Anthropic API keys", () => {
-    expect(isValidAnthropicKey("sk-ant-api03-abcdefghijklmnop")).toBe(true);
+describe("isValidGeminiKey", () => {
+  it("validates proper Gemini API keys", () => {
+    expect(isValidGeminiKey("AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ12345")).toBe(true);
   });
 
   it("treats empty key as valid (uses server env)", () => {
-    expect(isValidAnthropicKey("")).toBe(true);
-  });
-
-  it("rejects keys without sk-ant- prefix", () => {
-    expect(isValidAnthropicKey("sk-1234567890abcdefgh")).toBe(false);
+    expect(isValidGeminiKey("")).toBe(true);
   });
 
   it("rejects keys that are too short", () => {
-    expect(isValidAnthropicKey("sk-ant-short")).toBe(false);
+    expect(isValidGeminiKey("short")).toBe(false);
   });
 });
 

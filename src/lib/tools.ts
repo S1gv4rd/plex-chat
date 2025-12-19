@@ -1,7 +1,16 @@
-import Anthropic from "@anthropic-ai/sdk";
+// Tool type definition
+export interface Tool {
+  name: string;
+  description: string;
+  input_schema: {
+    type: "object";
+    properties: Record<string, { type: string; description: string }>;
+    required: string[];
+  };
+}
 
-// Tools for Claude to search the library
-export const tools: Anthropic.Tool[] = [
+// Tools for the AI to search the library
+export const tools: Tool[] = [
   {
     name: "search_by_person",
     description: "Search for movies and TV shows by actor or director name. Use this when the user asks about films with a specific actor, movies directed by someone, or what content features a particular person.",

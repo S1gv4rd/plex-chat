@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { encryptSettings, decryptSettings, clearCryptoKeys } from "@/lib/crypto";
-import { isValidUrl, isValidPlexToken } from "@/lib/utils";
+import { isValidUrl, isValidPlexToken, isValidGeminiKey, isValidOmdbKey } from "@/lib/utils";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 
 interface SettingsProps {
@@ -16,11 +16,15 @@ const SETTINGS_KEY = "plex-chat-settings";
 export interface AppSettings {
   plexUrl: string;
   plexToken: string;
+  geminiKey: string;
+  omdbKey: string;
 }
 
 const emptySettings: AppSettings = {
   plexUrl: "",
   plexToken: "",
+  geminiKey: "",
+  omdbKey: "",
 };
 
 // Async function to get settings (decrypts from storage)
@@ -49,11 +53,15 @@ export async function saveSettingsAsync(settings: AppSettings): Promise<void> {
 interface ValidationErrors {
   plexUrl?: string;
   plexToken?: string;
+  geminiKey?: string;
+  omdbKey?: string;
 }
 
 export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [plexUrl, setPlexUrl] = useState("");
   const [plexToken, setPlexToken] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
+  const [omdbKey, setOmdbKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -73,10 +81,16 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     if (!isValidPlexToken(plexToken)) {
       newErrors.plexToken = "Token should be at least 10 alphanumeric characters";
     }
+    if (!isValidGeminiKey(geminiKey)) {
+      newErrors.geminiKey = "Invalid Gemini API key format";
+    }
+    if (!isValidOmdbKey(omdbKey)) {
+      newErrors.omdbKey = "Key should be at least 8 alphanumeric characters";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [plexUrl, plexToken]);
+  }, [plexUrl, plexToken, geminiKey, omdbKey]);
 
   // Load settings asynchronously (with decryption)
   const loadSettings = useCallback(async () => {
@@ -85,6 +99,8 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
       const settings = await getSettingsAsync();
       setPlexUrl(settings.plexUrl);
       setPlexToken(settings.plexToken);
+      setGeminiKey(settings.geminiKey);
+      setOmdbKey(settings.omdbKey);
     } catch (error) {
       console.error("Failed to load settings:", error);
     } finally {
@@ -174,7 +190,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
 
     setLoading(true);
     try {
-      await saveSettingsAsync({ plexUrl, plexToken });
+      await saveSettingsAsync({ plexUrl, plexToken, geminiKey, omdbKey });
       setSaved(true);
       setTimeout(() => {
         onSave();
@@ -193,6 +209,8 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     }
     setPlexUrl("");
     setPlexToken("");
+    setGeminiKey("");
+    setOmdbKey("");
     setErrors({});
     localStorage.removeItem(SETTINGS_KEY);
     // Also clear encryption keys for complete cleanup
@@ -292,6 +310,54 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               <span className={`text-xs ${testResult.success ? "text-green-400" : "text-red-400"}`}>
                 {testResult.message}
               </span>
+            )}
+          </div>
+
+          {/* Gemini API Key */}
+          <div>
+            <label className="block text-sm text-foreground/60 mb-1.5">
+              Gemini API Key
+            </label>
+            <input
+              type="password"
+              value={geminiKey}
+              onChange={(e) => setGeminiKey(e.target.value)}
+              placeholder="Your Gemini API key"
+              className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
+                errors.geminiKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
+              }`}
+              aria-invalid={!!errors.geminiKey}
+            />
+            {errors.geminiKey ? (
+              <p className="text-xs text-red-400 mt-1">{errors.geminiKey}</p>
+            ) : (
+              <p className="text-xs text-foreground/30 mt-1">
+                Get from aistudio.google.com/apikey
+              </p>
+            )}
+          </div>
+
+          {/* OMDB API Key */}
+          <div>
+            <label className="block text-sm text-foreground/60 mb-1.5">
+              OMDB API Key <span className="text-foreground/30">(optional)</span>
+            </label>
+            <input
+              type="password"
+              value={omdbKey}
+              onChange={(e) => setOmdbKey(e.target.value)}
+              placeholder="Your OMDB API key"
+              className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
+                errors.omdbKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
+              }`}
+              aria-invalid={!!errors.omdbKey}
+            />
+            {errors.omdbKey ? (
+              <p className="text-xs text-red-400 mt-1">{errors.omdbKey}</p>
+            ) : (
+              <p className="text-xs text-foreground/30 mt-1">
+                For external ratings. Get free key at omdbapi.com
+              </p>
             )}
           </div>
 

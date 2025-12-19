@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { getLibraryContext, setCustomCredentials } from "@/lib/plex";
 import { NextRequest } from "next/server";
 import { ChatRequestSchema } from "@/lib/schemas";
@@ -360,15 +359,15 @@ async function lookupMovieExternal(title: string, year?: string): Promise<string
   }
 }
 
-// Convert Anthropic tools to Gemini format
-function convertToolsToGemini(anthropicTools: Anthropic.Tool[]) {
-  return anthropicTools.map(tool => ({
+// Convert tools to Gemini format
+function convertToolsToGemini(toolList: typeof tools) {
+  return toolList.map(tool => ({
     name: tool.name,
     description: tool.description,
     parameters: {
       type: "OBJECT",
-      properties: (tool.input_schema as { properties?: Record<string, unknown> }).properties || {},
-      required: (tool.input_schema as { required?: string[] }).required || [],
+      properties: tool.input_schema.properties || {},
+      required: tool.input_schema.required || [],
     },
   }));
 }
@@ -592,15 +591,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { messages, plexUrl, plexToken } = validation.data;
+    const { messages, plexUrl, plexToken, geminiKey, omdbKey } = validation.data;
 
     // Set custom Plex credentials if provided
     if (plexUrl || plexToken) {
       setCustomCredentials(plexUrl, plexToken);
     }
 
-    // Set OMDB API key (hardcoded)
-    const omdbApiKey = process.env.OMDB_API_KEY || "1f9b5825";
+    // Set OMDB API key from request or environment
+    const omdbApiKey = omdbKey || process.env.OMDB_API_KEY || null;
     setOmdbApiKey(omdbApiKey);
 
     // Configure external lookup functions for tool processor
@@ -633,8 +632,11 @@ export async function POST(request: NextRequest) {
         try {
           let finalText = "";
 
-          // Gemini API (hardcoded key)
-          const geminiApiKey = process.env.GEMINI_API_KEY || "AIzaSyCPL5pTVeWKVSKJYTmBYMwDgOE4K9OaPg0";
+          // Gemini API key from request or environment
+          const geminiApiKey = geminiKey || process.env.GEMINI_API_KEY;
+          if (!geminiApiKey) {
+            throw new Error("Gemini API key not configured. Add it in Settings.");
+          }
           const geminiTools = convertToolsToGemini(tools);
 
           // Build Gemini contents
@@ -733,8 +735,8 @@ export async function POST(request: NextRequest) {
 
     // Determine error code based on error type
     let code = "INTERNAL_ERROR";
-    if (rawMessage.includes("Anthropic") || rawMessage.includes("API")) {
-      code = "ANTHROPIC_API_ERROR";
+    if (rawMessage.includes("Gemini") || rawMessage.includes("GoogleGenerativeAI") || rawMessage.includes("generativelanguage")) {
+      code = "GEMINI_API_ERROR";
     }
 
     return Response.json(

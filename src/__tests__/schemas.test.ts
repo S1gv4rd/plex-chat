@@ -56,8 +56,8 @@ describe("ChatRequestSchema", () => {
       messages: [{ role: "user", content: "Hello" }],
       plexUrl: "http://localhost:32400",
       plexToken: "abc123",
-      anthropicKey: "sk-ant-xxx",
-      omdbKey: "123456",
+      geminiKey: "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ12345",
+      omdbKey: "12345678",
     });
     expect(result.success).toBe(true);
   });

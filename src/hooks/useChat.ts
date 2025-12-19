@@ -187,6 +187,8 @@ export function useChat() {
           messages: [...messages, userMessage],
           plexUrl: settings.plexUrl || undefined,
           plexToken: settings.plexToken || undefined,
+          geminiKey: settings.geminiKey || undefined,
+          omdbKey: settings.omdbKey || undefined,
         }),
         signal: controller.signal,
       });

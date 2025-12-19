@@ -17,21 +17,27 @@ const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Handle mobile keyboard - keep input visible when keyboard opens
+  // Handle mobile keyboard - keep input visible when keyboard opens (debounced)
   useEffect(() => {
     const visualViewport = window.visualViewport;
     if (!visualViewport) return;
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const handleResize = () => {
-      if (document.activeElement === inputRef.current) {
-        setTimeout(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (document.activeElement === inputRef.current) {
           inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 100);
-      }
+        }
+      }, 150);
     };
 
     visualViewport.addEventListener("resize", handleResize);
-    return () => visualViewport.removeEventListener("resize", handleResize);
+    return () => {
+      visualViewport.removeEventListener("resize", handleResize);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   // Reset textarea height when input is cleared

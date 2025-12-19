@@ -37,12 +37,12 @@ export function isValidPlexToken(token: string): boolean {
 }
 
 /**
- * Validates an Anthropic API key format
- * Keys start with "sk-ant-" and are fairly long
+ * Validates a Gemini API key format
+ * Keys are alphanumeric and typically 39 characters
  */
-export function isValidAnthropicKey(key: string): boolean {
+export function isValidGeminiKey(key: string): boolean {
   if (!key) return true; // Empty is valid (uses server env)
-  return key.startsWith("sk-ant-") && key.length > 20;
+  return key.length >= 30 && /^[a-zA-Z0-9_-]+$/.test(key);
 }
 
 /**

@@ -227,15 +227,21 @@ export async function decryptValue(ciphertext: string): Promise<string> {
 export async function encryptSettings(settings: {
   plexUrl: string;
   plexToken: string;
+  geminiKey: string;
+  omdbKey: string;
 }): Promise<string> {
-  const [plexUrl, plexToken] = await Promise.all([
+  const [plexUrl, plexToken, geminiKey, omdbKey] = await Promise.all([
     encryptValue(settings.plexUrl),
     encryptValue(settings.plexToken),
+    encryptValue(settings.geminiKey),
+    encryptValue(settings.omdbKey),
   ]);
 
   return JSON.stringify({
     plexUrl,
     plexToken,
+    geminiKey,
+    omdbKey,
     _encrypted: true,
   });
 }
@@ -244,6 +250,8 @@ export async function encryptSettings(settings: {
 export async function decryptSettings(stored: string): Promise<{
   plexUrl: string;
   plexToken: string;
+  geminiKey: string;
+  omdbKey: string;
 } | null> {
   try {
     const parsed = JSON.parse(stored);
@@ -253,15 +261,19 @@ export async function decryptSettings(stored: string): Promise<{
       return {
         plexUrl: parsed.plexUrl || "",
         plexToken: parsed.plexToken || "",
+        geminiKey: parsed.geminiKey || "",
+        omdbKey: parsed.omdbKey || "",
       };
     }
 
-    const [plexUrl, plexToken] = await Promise.all([
+    const [plexUrl, plexToken, geminiKey, omdbKey] = await Promise.all([
       decryptValue(parsed.plexUrl),
       decryptValue(parsed.plexToken),
+      decryptValue(parsed.geminiKey),
+      decryptValue(parsed.omdbKey),
     ]);
 
-    return { plexUrl, plexToken };
+    return { plexUrl, plexToken, geminiKey, omdbKey };
   } catch {
     return null;
   }

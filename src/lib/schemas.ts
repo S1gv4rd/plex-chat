@@ -13,6 +13,8 @@ export const ChatRequestSchema = z.object({
   messages: z.array(MessageSchema).min(1, "At least one message is required"),
   plexUrl: z.string().url("Invalid Plex URL").optional(),
   plexToken: z.string().min(1).optional(),
+  geminiKey: z.string().min(1).optional(),
+  omdbKey: z.string().min(1).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
