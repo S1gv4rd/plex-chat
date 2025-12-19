@@ -10,8 +10,32 @@ export const CACHE_TTL = {
   RECENT: 2 * 60 * 1000, // 2 minutes for recently added/on deck
 };
 
-// Simple in-memory cache with TTL
+// Cache configuration
+const MAX_CACHE_SIZE = 100; // Maximum number of entries in cache
+
+// Simple in-memory cache with TTL and size limit
 const cache = new Map<string, { data: PlexApiResponse; expires: number }>();
+
+// Evict oldest entries when cache exceeds max size
+function evictIfNeeded(): void {
+  if (cache.size <= MAX_CACHE_SIZE) return;
+
+  // Remove expired entries first
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (entry.expires <= now) {
+      cache.delete(key);
+    }
+  }
+
+  // If still over limit, remove oldest entries (first inserted)
+  if (cache.size > MAX_CACHE_SIZE) {
+    const keysToDelete = Array.from(cache.keys()).slice(0, cache.size - MAX_CACHE_SIZE);
+    for (const key of keysToDelete) {
+      cache.delete(key);
+    }
+  }
+}
 
 // Cache warmup state
 let cacheWarmedUp = false;
@@ -42,6 +66,7 @@ export function setCache(
   ttl = CACHE_TTL.DEFAULT
 ): void {
   cache.set(key, { data, expires: Date.now() + ttl });
+  evictIfNeeded();
 }
 
 export function getLibrariesCache(): PlexLibrary[] | null {

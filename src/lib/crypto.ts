@@ -130,6 +130,11 @@ function isCryptoAvailable(): boolean {
          typeof indexedDB !== "undefined";
 }
 
+// Export function for UI to check encryption status
+export function isEncryptionAvailable(): boolean {
+  return isCryptoAvailable();
+}
+
 // Security warning flag - track if we've warned about fallback mode
 let hasWarnedAboutFallback = false;
 

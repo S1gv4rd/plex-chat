@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { encryptSettings, decryptSettings, clearCryptoKeys } from "@/lib/crypto";
+import { encryptSettings, decryptSettings, clearCryptoKeys, isEncryptionAvailable } from "@/lib/crypto";
 import { isValidUrl, isValidPlexToken, isValidGeminiKey, isValidOmdbKey } from "@/lib/utils";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 
@@ -67,9 +67,15 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [encryptionWarning, setEncryptionWarning] = useState(false);
   const { visible, shouldRender } = useModalAnimation(isOpen);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Check encryption availability on mount
+  useEffect(() => {
+    setEncryptionWarning(!isEncryptionAvailable());
+  }, []);
 
   // Validate all fields and return true if valid
   const validate = useCallback((): boolean => {
@@ -186,6 +192,8 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   }, [isOpen, onClose]);
 
   const handleSave = async () => {
+    // Prevent double-click race condition
+    if (loading || saved) return;
     if (!validate()) return;
 
     setLoading(true);
@@ -249,6 +257,12 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             </svg>
           </button>
         </div>
+
+        {encryptionWarning && (
+          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-sm text-yellow-200">
+            <strong>Warning:</strong> Secure storage unavailable. Credentials will be stored with basic encoding only. Use HTTPS for better security.
+          </div>
+        )}
 
         <div className="space-y-4">
           {/* Plex URL */}

@@ -714,12 +714,23 @@ export async function POST(request: NextRequest) {
           const errorMessage = error instanceof Error ? error.message : "Something went wrong";
           let userMessage = "Sorry, something went wrong. Please try again.";
 
+          // Map specific errors to user-friendly messages
           if (errorMessage.includes("API key not configured")) {
             userMessage = "Please add your Gemini API key in Settings to use the chat.";
           } else if (errorMessage.includes("Gemini API error: 400") || errorMessage.includes("API_KEY_INVALID")) {
             userMessage = "Your Gemini API key is invalid. Please check your key in Settings.";
+          } else if (errorMessage.includes("Gemini API error: 429") || errorMessage.includes("RATE_LIMIT")) {
+            userMessage = "Rate limit reached. Please wait a moment before trying again.";
+          } else if (errorMessage.includes("Gemini API error: 5")) {
+            userMessage = "The AI service is temporarily unavailable. Please try again in a few moments.";
           } else if (errorMessage.includes("Gemini API error")) {
             userMessage = "There was an issue with the AI service. Please try again.";
+          } else if (errorMessage.includes("Plex") || errorMessage.includes("plex")) {
+            userMessage = "Could not connect to your Plex server. Please check your settings.";
+          } else if (errorMessage.includes("timeout") || errorMessage.includes("ETIMEDOUT")) {
+            userMessage = "The request timed out. Please try again.";
+          } else if (errorMessage.includes("network") || errorMessage.includes("ECONNREFUSED")) {
+            userMessage = "Network error. Please check your connection and try again.";
           }
 
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: userMessage })}\n\n`));

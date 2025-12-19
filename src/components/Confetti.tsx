@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 
 interface ConfettiProps {
   active: boolean;
@@ -33,18 +33,31 @@ function generateParticles(): Particle[] {
 
 const Confetti = memo(function Confetti({ active, onComplete }: ConfettiProps) {
   const [particles, setParticles] = useState<Particle[]>([]);
+  const mountedRef = useRef(true);
 
-  // Handle activation and cleanup - using microtask to avoid synchronous setState warning
+  // Track mounted state
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Handle activation and cleanup
   useEffect(() => {
     if (active) {
-      // Use queueMicrotask to defer state update
+      // Use queueMicrotask to defer state update, with mounted check
       queueMicrotask(() => {
-        setParticles(generateParticles());
+        if (mountedRef.current) {
+          setParticles(generateParticles());
+        }
       });
 
       const timer = setTimeout(() => {
-        setParticles([]);
-        onComplete?.();
+        if (mountedRef.current) {
+          setParticles([]);
+          onComplete?.();
+        }
       }, 2000);
 
       return () => clearTimeout(timer);

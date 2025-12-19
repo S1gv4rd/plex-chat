@@ -260,55 +260,64 @@ export function useChat() {
       const decoder = new TextDecoder();
       let fullContent = "";
       let buffer = ""; // Buffer for incomplete lines across chunk boundaries
+      let streamDone = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      try {
+        while (!streamDone) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
 
-        // Process complete lines only
-        const lines = buffer.split("\n");
-        // Keep the last potentially incomplete line in buffer
-        buffer = lines.pop() || "";
+          // Process complete lines only
+          const lines = buffer.split("\n");
+          // Keep the last potentially incomplete line in buffer
+          buffer = lines.pop() || "";
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (data === "[DONE]") break;
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              if (data === "[DONE]") {
+                streamDone = true;
+                break;
+              }
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.status !== undefined) {
+                  dispatch({ type: "SET_LOADING_STATUS", payload: parsed.status });
+                }
+                if (parsed.text) {
+                  fullContent += parsed.text;
+                  dispatch({ type: "SET_STREAMING_CONTENT", payload: fullContent });
+                }
+                if (parsed.error) throw new Error(parsed.error);
+              } catch (e) {
+                if (data.trim() && data !== "[DONE]") {
+                  console.error("Parse error:", e, "Data:", data);
+                }
+              }
+            }
+          }
+        }
+
+        // Process any remaining data in buffer (only if stream wasn't explicitly done)
+        if (!streamDone && buffer.startsWith("data: ")) {
+          const data = buffer.slice(6);
+          if (data !== "[DONE]" && data.trim()) {
             try {
               const parsed = JSON.parse(data);
-              if (parsed.status !== undefined) {
-                dispatch({ type: "SET_LOADING_STATUS", payload: parsed.status });
-              }
               if (parsed.text) {
                 fullContent += parsed.text;
-                dispatch({ type: "SET_STREAMING_CONTENT", payload: fullContent });
               }
-              if (parsed.error) throw new Error(parsed.error);
-            } catch (e) {
-              if (data.trim() && data !== "[DONE]") {
-                console.error("Parse error:", e, "Data:", data);
-              }
+            } catch {
+              // Ignore incomplete final chunk
             }
           }
         }
-      }
-
-      // Process any remaining data in buffer
-      if (buffer.startsWith("data: ")) {
-        const data = buffer.slice(6);
-        if (data !== "[DONE]" && data.trim()) {
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.text) {
-              fullContent += parsed.text;
-            }
-          } catch {
-            // Ignore incomplete final chunk
-          }
-        }
+      } finally {
+        // Always close the reader to free resources
+        reader.releaseLock();
       }
 
       dispatch({ type: "FINISH_SENDING", payload: { content: fullContent } });

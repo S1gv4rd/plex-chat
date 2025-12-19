@@ -19,6 +19,7 @@ export function useModalAnimation(
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [visible, setVisible] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
+  const innerAnimationFrameRef = useRef<number | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use useLayoutEffect for synchronous DOM updates before browser paint
@@ -27,6 +28,9 @@ export function useModalAnimation(
     // Cleanup previous animations
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (innerAnimationFrameRef.current) {
+      cancelAnimationFrame(innerAnimationFrameRef.current);
     }
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -38,7 +42,7 @@ export function useModalAnimation(
       setShouldRender(true);
       // Use double RAF to ensure DOM has updated before animating
       animationFrameRef.current = requestAnimationFrame(() => {
-        animationFrameRef.current = requestAnimationFrame(() => {
+        innerAnimationFrameRef.current = requestAnimationFrame(() => {
           setVisible(true);
         });
       });
@@ -53,6 +57,9 @@ export function useModalAnimation(
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (innerAnimationFrameRef.current) {
+        cancelAnimationFrame(innerAnimationFrameRef.current);
       }
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
