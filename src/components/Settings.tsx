@@ -301,7 +301,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               type="button"
               onClick={testConnection}
               disabled={testing || !plexUrl || !plexToken}
-              className="px-3 py-1.5 text-xs rounded-lg border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="min-w-[120px] px-3 py-1.5 text-xs rounded-lg border border-white/10 hover:border-plex-orange/30 hover:bg-plex-orange/5 text-foreground/60 hover:text-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {testing ? "Testing..." : "Test Connection"}
             </button>
