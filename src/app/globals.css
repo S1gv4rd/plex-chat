@@ -47,8 +47,9 @@ html {
 /* Prevent zoom on input focus (iOS) and allow text selection/paste */
 input, textarea, select {
   font-size: 16px !important;
-  -webkit-user-select: text;
-  user-select: text;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
 }
 
 /* Safe area padding for notched devices */
