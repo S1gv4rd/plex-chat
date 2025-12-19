@@ -372,6 +372,128 @@ function getAnthropicClient(customKey?: string): Anthropic {
   return anthropic;
 }
 
+// Convert Anthropic tools to Gemini format
+function convertToolsToGemini(anthropicTools: Anthropic.Tool[]) {
+  return anthropicTools.map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: {
+      type: "OBJECT",
+      properties: (tool.input_schema as { properties?: Record<string, unknown> }).properties || {},
+      required: (tool.input_schema as { required?: string[] }).required || [],
+    },
+  }));
+}
+
+// Gemini API call with function calling
+async function callGemini(
+  apiKey: string,
+  systemPrompt: string,
+  messages: { role: string; content: string }[],
+  geminiTools: ReturnType<typeof convertToolsToGemini>
+): Promise<{ text?: string; functionCalls?: { name: string; args: Record<string, unknown> }[] }> {
+  const contents = messages.map(m => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        tools: [{ functionDeclarations: geminiTools }],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.7,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Gemini] API error:", error);
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const candidate = data.candidates?.[0];
+  const parts = candidate?.content?.parts || [];
+
+  const functionCalls: { name: string; args: Record<string, unknown> }[] = [];
+  let text = "";
+
+  for (const part of parts) {
+    if (part.text) {
+      text += part.text;
+    }
+    if (part.functionCall) {
+      functionCalls.push({
+        name: part.functionCall.name,
+        args: part.functionCall.args || {},
+      });
+    }
+  }
+
+  return { text: text || undefined, functionCalls: functionCalls.length > 0 ? functionCalls : undefined };
+}
+
+// Gemini API call with function results
+async function callGeminiWithResults(
+  apiKey: string,
+  systemPrompt: string,
+  contents: unknown[],
+  geminiTools: ReturnType<typeof convertToolsToGemini>
+): Promise<{ text?: string; functionCalls?: { name: string; args: Record<string, unknown> }[] }> {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        tools: [{ functionDeclarations: geminiTools }],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.7,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Gemini] API error:", error);
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const candidate = data.candidates?.[0];
+  const parts = candidate?.content?.parts || [];
+
+  const functionCalls: { name: string; args: Record<string, unknown> }[] = [];
+  let text = "";
+
+  for (const part of parts) {
+    if (part.text) {
+      text += part.text;
+    }
+    if (part.functionCall) {
+      functionCalls.push({
+        name: part.functionCall.name,
+        args: part.functionCall.args || {},
+      });
+    }
+  }
+
+  return { text: text || undefined, functionCalls: functionCalls.length > 0 ? functionCalls : undefined };
+}
+
 // System prompt for Claude
 function getSystemPrompt(libraryContext: string): string {
   return `You are a Plex library assistant helping users discover what to watch from THEIR library.
@@ -466,7 +588,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { messages, plexUrl, plexToken, anthropicKey, omdbKey } = validation.data;
+    const { messages, plexUrl, plexToken, anthropicKey, geminiKey, omdbKey, model = "claude" } = validation.data;
 
     // Set custom Plex credentials if provided
     if (plexUrl || plexToken) {
@@ -485,9 +607,6 @@ export async function POST(request: NextRequest) {
       lookupMovieExternal,
     });
 
-    // Get Anthropic client
-    const client = getAnthropicClient(anthropicKey);
-
     // Get Plex library context
     let libraryContext: string;
     try {
@@ -501,82 +620,146 @@ export async function POST(request: NextRequest) {
     }
 
     const systemPrompt = getSystemPrompt(libraryContext);
-
-    // Build messages for API
-    const apiMessages: Anthropic.MessageParam[] = messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
-
     const encoder = new TextEncoder();
 
     // Create streaming response
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Initial API call
-          let response = await client.messages.create({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 1024,
-            system: systemPrompt,
-            tools: tools,
-            messages: apiMessages,
-          });
+          let finalText = "";
 
-          // Handle tool use loop
-          while (response.stop_reason === "tool_use") {
-            const toolUseBlocks = response.content.filter(
-              (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-            );
+          if (model === "gemini") {
+            // ===== GEMINI PATH =====
+            const geminiApiKey = geminiKey || process.env.GEMINI_API_KEY;
+            if (!geminiApiKey) {
+              throw new Error("Gemini API key not configured");
+            }
 
-            if (toolUseBlocks.length === 0) break;
+            const geminiTools = convertToolsToGemini(tools);
 
-            // Show loading indicator
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
+            // Build Gemini contents
+            const geminiContents: unknown[] = messages.map(m => ({
+              role: m.role === "assistant" ? "model" : "user",
+              parts: [{ text: m.content }],
+            }));
 
-            // Process all tool calls with validation
-            const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-              toolUseBlocks.map(async (toolUseBlock) => {
-                const toolResult = await processToolCall(
-                  toolUseBlock.name,
-                  toolUseBlock.input
-                );
-                return {
-                  type: "tool_result" as const,
-                  tool_use_id: toolUseBlock.id,
-                  content: toolResult,
-                };
-              })
-            );
+            let response = await callGemini(geminiApiKey, systemPrompt, messages, geminiTools);
 
-            apiMessages.push({
-              role: "assistant",
-              content: response.content,
-            });
-            apiMessages.push({
-              role: "user",
-              content: toolResults,
-            });
+            // Handle function calling loop
+            let maxIterations = 10;
+            while (response.functionCalls && response.functionCalls.length > 0 && maxIterations > 0) {
+              maxIterations--;
 
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
+              // Show loading indicator
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
 
-            response = await client.messages.create({
+              // Process function calls
+              const functionResponses: { name: string; response: { result: string } }[] = [];
+              for (const fc of response.functionCalls) {
+                const result = await processToolCall(fc.name, fc.args);
+                functionResponses.push({
+                  name: fc.name,
+                  response: { result },
+                });
+              }
+
+              // Add assistant response with function calls
+              geminiContents.push({
+                role: "model",
+                parts: response.functionCalls.map(fc => ({
+                  functionCall: { name: fc.name, args: fc.args },
+                })),
+              });
+
+              // Add function results
+              geminiContents.push({
+                role: "user",
+                parts: functionResponses.map(fr => ({
+                  functionResponse: fr,
+                })),
+              });
+
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
+
+              // Call again with results
+              response = await callGeminiWithResults(geminiApiKey, systemPrompt, geminiContents, geminiTools);
+            }
+
+            finalText = response.text || "I couldn't generate a response.";
+          } else {
+            // ===== CLAUDE PATH =====
+            const client = getAnthropicClient(anthropicKey);
+
+            // Build messages for API
+            const apiMessages: Anthropic.MessageParam[] = messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            }));
+
+            // Initial API call
+            let response = await client.messages.create({
               model: "claude-haiku-4-5-20251001",
               max_tokens: 1024,
               system: systemPrompt,
               tools: tools,
               messages: apiMessages,
             });
+
+            // Handle tool use loop
+            while (response.stop_reason === "tool_use") {
+              const toolUseBlocks = response.content.filter(
+                (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+              );
+
+              if (toolUseBlocks.length === 0) break;
+
+              // Show loading indicator
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
+
+              // Process all tool calls with validation
+              const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+                toolUseBlocks.map(async (toolUseBlock) => {
+                  const toolResult = await processToolCall(
+                    toolUseBlock.name,
+                    toolUseBlock.input
+                  );
+                  return {
+                    type: "tool_result" as const,
+                    tool_use_id: toolUseBlock.id,
+                    content: toolResult,
+                  };
+                })
+              );
+
+              apiMessages.push({
+                role: "assistant",
+                content: response.content,
+              });
+              apiMessages.push({
+                role: "user",
+                content: toolResults,
+              });
+
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
+
+              response = await client.messages.create({
+                model: "claude-haiku-4-5-20251001",
+                max_tokens: 1024,
+                system: systemPrompt,
+                tools: tools,
+                messages: apiMessages,
+              });
+            }
+
+            // Extract the final text response
+            const textBlock = response.content.find(
+              (block): block is Anthropic.TextBlock => block.type === "text"
+            );
+            finalText = textBlock?.text || "I couldn't generate a response.";
           }
 
           // Clear status before streaming text
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: null })}\n\n`));
-
-          // Extract the final text response
-          const textBlock = response.content.find(
-            (block): block is Anthropic.TextBlock => block.type === "text"
-          );
-          const finalText = textBlock?.text || "I couldn't generate a response.";
 
           // Stream word by word
           const words = finalText.split(/(\s+)/);

@@ -13,18 +13,24 @@ interface SettingsProps {
 
 const SETTINGS_KEY = "plex-chat-settings";
 
+export type ModelProvider = "claude" | "gemini";
+
 export interface AppSettings {
   plexUrl: string;
   plexToken: string;
   anthropicKey: string;
+  geminiKey: string;
   omdbKey: string;
+  model: ModelProvider;
 }
 
 const emptySettings: AppSettings = {
   plexUrl: "",
   plexToken: "",
   anthropicKey: "",
+  geminiKey: "",
   omdbKey: "",
+  model: "claude",
 };
 
 // Async function to get settings (decrypts from storage)
@@ -37,7 +43,8 @@ export async function getSettingsAsync(): Promise<AppSettings> {
     if (!stored) return emptySettings;
 
     const decrypted = await decryptSettings(stored);
-    return decrypted || emptySettings;
+    // Merge with defaults for backward compatibility with old stored settings
+    return decrypted ? { ...emptySettings, ...decrypted } : emptySettings;
   } catch {
     return emptySettings;
   }
@@ -53,6 +60,7 @@ interface ValidationErrors {
   plexUrl?: string;
   plexToken?: string;
   anthropicKey?: string;
+  geminiKey?: string;
   omdbKey?: string;
 }
 
@@ -60,7 +68,9 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [plexUrl, setPlexUrl] = useState("");
   const [plexToken, setPlexToken] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
   const [omdbKey, setOmdbKey] = useState("");
+  const [model, setModel] = useState<ModelProvider>("claude");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -80,8 +90,12 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     if (!isValidPlexToken(plexToken)) {
       newErrors.plexToken = "Token should be at least 10 alphanumeric characters";
     }
-    if (!isValidAnthropicKey(anthropicKey)) {
+    // Validate API key based on selected model
+    if (model === "claude" && !isValidAnthropicKey(anthropicKey)) {
       newErrors.anthropicKey = "Key should start with 'sk-ant-'";
+    }
+    if (model === "gemini" && geminiKey && geminiKey.length < 20) {
+      newErrors.geminiKey = "Key should be at least 20 characters";
     }
     if (!isValidOmdbKey(omdbKey)) {
       newErrors.omdbKey = "Key should be at least 8 alphanumeric characters";
@@ -89,7 +103,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [plexUrl, plexToken, anthropicKey, omdbKey]);
+  }, [plexUrl, plexToken, anthropicKey, geminiKey, omdbKey, model]);
 
   // Load settings asynchronously (with decryption)
   const loadSettings = useCallback(async () => {
@@ -99,7 +113,9 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
       setPlexUrl(settings.plexUrl);
       setPlexToken(settings.plexToken);
       setAnthropicKey(settings.anthropicKey);
+      setGeminiKey(settings.geminiKey || "");
       setOmdbKey(settings.omdbKey || "");
+      setModel(settings.model || "claude");
     } catch (error) {
       console.error("Failed to load settings:", error);
     } finally {
@@ -189,7 +205,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
 
     setLoading(true);
     try {
-      await saveSettingsAsync({ plexUrl, plexToken, anthropicKey, omdbKey });
+      await saveSettingsAsync({ plexUrl, plexToken, anthropicKey, geminiKey, omdbKey, model });
       setSaved(true);
       setTimeout(() => {
         onSave();
@@ -209,7 +225,9 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     setPlexUrl("");
     setPlexToken("");
     setAnthropicKey("");
+    setGeminiKey("");
     setOmdbKey("");
+    setModel("claude");
     setErrors({});
     localStorage.removeItem(SETTINGS_KEY);
     // Also clear encryption keys for complete cleanup
@@ -312,25 +330,81 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             )}
           </div>
 
-          {/* Anthropic API Key */}
+          {/* Model Selection */}
           <div>
             <label className="block text-sm text-foreground/60 mb-1.5">
-              Anthropic API Key
+              AI Model
             </label>
-            <input
-              type="password"
-              value={anthropicKey}
-              onChange={(e) => setAnthropicKey(e.target.value)}
-              placeholder="sk-ant-..."
-              className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
-                errors.anthropicKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
-              }`}
-              aria-invalid={!!errors.anthropicKey}
-            />
-            {errors.anthropicKey && (
-              <p className="text-xs text-red-400 mt-1">{errors.anthropicKey}</p>
-            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setModel("claude")}
+                className={`flex-1 px-3 py-2.5 rounded-xl text-sm transition-all ${
+                  model === "claude"
+                    ? "bg-plex-orange text-black font-medium"
+                    : "bg-white/5 border border-white/10 text-foreground/60 hover:text-foreground hover:border-white/20"
+                }`}
+              >
+                Claude
+              </button>
+              <button
+                type="button"
+                onClick={() => setModel("gemini")}
+                className={`flex-1 px-3 py-2.5 rounded-xl text-sm transition-all ${
+                  model === "gemini"
+                    ? "bg-plex-orange text-black font-medium"
+                    : "bg-white/5 border border-white/10 text-foreground/60 hover:text-foreground hover:border-white/20"
+                }`}
+              >
+                Gemini Flash
+              </button>
+            </div>
           </div>
+
+          {/* API Key - conditional based on model */}
+          {model === "claude" ? (
+            <div>
+              <label className="block text-sm text-foreground/60 mb-1.5">
+                Anthropic API Key
+              </label>
+              <input
+                type="password"
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-..."
+                className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
+                  errors.anthropicKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
+                }`}
+                aria-invalid={!!errors.anthropicKey}
+              />
+              {errors.anthropicKey && (
+                <p className="text-xs text-red-400 mt-1">{errors.anthropicKey}</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm text-foreground/60 mb-1.5">
+                Google AI API Key
+              </label>
+              <input
+                type="password"
+                value={geminiKey}
+                onChange={(e) => setGeminiKey(e.target.value)}
+                placeholder="Your Gemini API key"
+                className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
+                  errors.geminiKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
+                }`}
+                aria-invalid={!!errors.geminiKey}
+              />
+              {errors.geminiKey ? (
+                <p className="text-xs text-red-400 mt-1">{errors.geminiKey}</p>
+              ) : (
+                <p className="text-xs text-foreground/30 mt-1">
+                  Get a key at aistudio.google.com
+                </p>
+              )}
+            </div>
+          )}
 
           {/* OMDB API Key */}
           <div>

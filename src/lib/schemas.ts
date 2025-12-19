@@ -14,7 +14,9 @@ export const ChatRequestSchema = z.object({
   plexUrl: z.string().url("Invalid Plex URL").optional(),
   plexToken: z.string().min(1).optional(),
   anthropicKey: z.string().min(1).optional(),
+  geminiKey: z.string().min(1).optional(),
   omdbKey: z.string().min(1).optional(),
+  model: z.enum(["claude", "gemini"]).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
