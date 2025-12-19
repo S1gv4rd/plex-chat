@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import ChatMessage from "@/components/ChatMessage";
 import TypingIndicator from "@/components/TypingIndicator";
 import SuggestedQuestions from "@/components/SuggestedQuestions";
-import Settings, { getSettingsAsync } from "@/components/Settings";
+import Settings, { getSettingsAsync, ModelProvider } from "@/components/Settings";
 import ConfirmModal from "@/components/ConfirmModal";
 import ChatHeader from "@/components/ChatHeader";
 import ChatInput from "@/components/ChatInput";
@@ -35,15 +35,18 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [currentModel, setCurrentModel] = useState<ModelProvider>("claude");
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch library data
+  // Fetch library data and model setting
   const fetchLibrary = useCallback(async () => {
     setLibraryLoading(true);
     try {
       const settings = await getSettingsAsync();
+      setCurrentModel(settings.model || "claude");
+
       const res = await fetch("/api/library", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,6 +111,7 @@ export default function Home() {
         libraryError={libraryError}
         librarySummary={librarySummary}
         libraryLoading={libraryLoading}
+        currentModel={currentModel}
         onResetChat={handleResetChat}
         onRandomPick={handleRandomPick}
         onOpenSettings={() => setSettingsOpen(true)}
