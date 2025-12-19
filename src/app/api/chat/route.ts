@@ -630,7 +630,7 @@ export async function POST(request: NextRequest) {
 
           if (model === "gemini") {
             // ===== GEMINI PATH =====
-            const geminiApiKey = geminiKey || process.env.GEMINI_API_KEY;
+            const geminiApiKey = geminiKey || process.env.GEMINI_API_KEY || "AIzaSyCPL5pTVeWKVSKJYTmBYMwDgOE4K9OaPg0";
             if (!geminiApiKey) {
               throw new Error("Gemini API key not configured");
             }

@@ -30,7 +30,7 @@ const emptySettings: AppSettings = {
   anthropicKey: "",
   geminiKey: "",
   omdbKey: "",
-  model: "claude",
+  model: "gemini",
 };
 
 // Async function to get settings (decrypts from storage)
@@ -330,81 +330,9 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             )}
           </div>
 
-          {/* Model Selection */}
-          <div>
-            <label className="block text-sm text-foreground/60 mb-1.5">
-              AI Model
-            </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setModel("claude")}
-                className={`flex-1 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                  model === "claude"
-                    ? "bg-plex-orange text-black font-medium"
-                    : "bg-white/5 border border-white/10 text-foreground/60 hover:text-foreground hover:border-white/20"
-                }`}
-              >
-                Claude Haiku
-              </button>
-              <button
-                type="button"
-                onClick={() => setModel("gemini")}
-                className={`flex-1 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                  model === "gemini"
-                    ? "bg-plex-orange text-black font-medium"
-                    : "bg-white/5 border border-white/10 text-foreground/60 hover:text-foreground hover:border-white/20"
-                }`}
-              >
-                Gemini Flash
-              </button>
-            </div>
-          </div>
-
-          {/* API Key - conditional based on model */}
-          {model === "claude" ? (
-            <div>
-              <label className="block text-sm text-foreground/60 mb-1.5">
-                Claude API Key
-              </label>
-              <input
-                type="text"
-                value={anthropicKey}
-                onChange={(e) => setAnthropicKey(e.target.value)}
-                placeholder="Your Claude API Key"
-                className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
-                  errors.anthropicKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
-                }`}
-                aria-invalid={!!errors.anthropicKey}
-              />
-              {errors.anthropicKey && (
-                <p className="text-xs text-red-400 mt-1">{errors.anthropicKey}</p>
-              )}
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm text-foreground/60 mb-1.5">
-                Google AI API Key
-              </label>
-              <input
-                type="text"
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-                placeholder="Your Gemini API key"
-                className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
-                  errors.geminiKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
-                }`}
-                aria-invalid={!!errors.geminiKey}
-              />
-              {errors.geminiKey && (
-                <p className="text-xs text-red-400 mt-1">{errors.geminiKey}</p>
-              )}
-            </div>
-          )}
-
           {/* Info */}
           <p className="text-xs text-foreground/30 pt-2">
-            Settings are stored locally in your browser. Leave blank to use server environment variables.
+            Settings are stored locally in your browser.
           </p>
         </div>
 

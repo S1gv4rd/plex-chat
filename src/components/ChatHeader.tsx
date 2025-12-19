@@ -26,7 +26,7 @@ const ChatHeader = memo(function ChatHeader({
   onRandomPick,
   onOpenSettings,
 }: ChatHeaderProps) {
-  const modelLabel = currentModel === "gemini" ? "Gemini" : "Claude";
+  const modelLabel = "Gemini";
 
   return (
     <header className="px-4 py-3 safe-top shrink-0 overflow-visible">
