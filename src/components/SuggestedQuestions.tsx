@@ -8,12 +8,6 @@ interface SuggestedQuestionsProps {
 }
 
 const defaultSuggestions = [
-  // Quick actions
-  "Surprise me with something good",
-  "Pick a random movie for me",
-  "What should I watch tonight?",
-  "I'm feeling lucky, choose for me",
-
   // Mood-based
   "I need a good laugh tonight",
   "Something to keep me on the edge of my seat",
