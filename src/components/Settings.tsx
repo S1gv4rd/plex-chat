@@ -396,12 +396,8 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                 }`}
                 aria-invalid={!!errors.geminiKey}
               />
-              {errors.geminiKey ? (
+              {errors.geminiKey && (
                 <p className="text-xs text-red-400 mt-1">{errors.geminiKey}</p>
-              ) : (
-                <p className="text-xs text-foreground/30 mt-1">
-                  Get a key at aistudio.google.com
-                </p>
               )}
             </div>
           )}
