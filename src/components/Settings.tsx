@@ -345,7 +345,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                     : "bg-white/5 border border-white/10 text-foreground/60 hover:text-foreground hover:border-white/20"
                 }`}
               >
-                Claude
+                Claude Sonnet
               </button>
               <button
                 type="button"
@@ -356,7 +356,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                     : "bg-white/5 border border-white/10 text-foreground/60 hover:text-foreground hover:border-white/20"
                 }`}
               >
-                Gemini 3 Flash
+                Gemini Flash
               </button>
             </div>
           </div>
