@@ -139,7 +139,7 @@ export default function Home() {
               {streamingContent && <ChatMessage role="assistant" content={streamingContent} isStreaming />}
               {isLoading && !streamingContent && <TypingIndicator status={loadingStatus || undefined} />}
               {!isLoading && !streamingContent && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
-                <FollowUpChips onSelect={sendMessage} />
+                <FollowUpChips onSelect={sendMessage} lastMessage={messages[messages.length - 1].content} />
               )}
               <div ref={messagesEndRef} />
             </>
