@@ -51,12 +51,24 @@ export async function processToolCall(
       if (results.movies.length === 0 && results.shows.length === 0) {
         return `No movies or shows found featuring "${input.name}" in the library.`;
       }
+
+      // Fetch Letterboxd ratings for movies in parallel (limit to first 15)
+      const moviesToShow = results.movies.slice(0, 15);
+      const letterboxdRatings = externalConfig
+        ? await Promise.all(
+            moviesToShow.map(m => externalConfig!.getLetterboxdRating(m.title, m.year?.toString()))
+          )
+        : moviesToShow.map(() => null);
+
       let response = "";
       if (results.movies.length > 0) {
         response += `Movies with ${input.name} (${results.movies.length} found):\n`;
-        for (const movie of results.movies.slice(0, 15)) {
+        for (let i = 0; i < moviesToShow.length; i++) {
+          const movie = moviesToShow[i];
+          const lb = letterboxdRatings[i];
           const directors = movie.directors?.length ? ` - Dir: ${movie.directors.join(", ")}` : "";
-          response += `- **${movie.title}** (${movie.year || "?"})${directors}\n`;
+          const rating = lb ? ` ⭐ ${lb.rating}` : "";
+          response += `- **${movie.title}** (${movie.year || "?"})${rating}${directors}\n`;
         }
         if (results.movies.length > 15) {
           response += `... and ${results.movies.length - 15} more movies\n`;
@@ -94,14 +106,25 @@ export async function processToolCall(
           ? `No unwatched ${genre} movies found in the library.`
           : "No unwatched movies found in the library.";
       }
+
+      // Fetch Letterboxd ratings in parallel
+      const letterboxdRatings = externalConfig
+        ? await Promise.all(
+            movies.map(m => externalConfig!.getLetterboxdRating(m.title, m.year?.toString()))
+          )
+        : movies.map(() => null);
+
       let response = genre
         ? `Here are ${movies.length} unwatched ${genre} movies from your library:\n`
         : `Here are ${movies.length} unwatched movies from your library:\n`;
-      for (const movie of movies) {
+      for (let i = 0; i < movies.length; i++) {
+        const movie = movies[i];
+        const lb = letterboxdRatings[i];
         const genres = movie.genres?.slice(0, 3).join(", ") || "";
         const director = movie.directors?.[0] ? ` - Dir: ${movie.directors[0]}` : "";
+        const rating = lb ? ` ⭐ ${lb.rating}` : "";
         const summary = movie.summary ? ` - ${movie.summary.slice(0, 100)}...` : "";
-        response += `- **${movie.title}** (${movie.year || "?"})${director}${genres ? ` [${genres}]` : ""}${summary}\n`;
+        response += `- **${movie.title}** (${movie.year || "?"})${rating}${director}${genres ? ` [${genres}]` : ""}${summary}\n`;
       }
       return response;
     }
@@ -136,11 +159,22 @@ export async function processToolCall(
       const shuffled = shuffle(results);
       const diverse = type === "movie" ? diversifyByDirector(shuffled) : shuffled;
       const selected = diverse.slice(0, 12);
+
+      // Fetch Letterboxd ratings for movies in parallel
+      const letterboxdRatings = (externalConfig && type === "movie")
+        ? await Promise.all(
+            selected.map(m => externalConfig!.getLetterboxdRating(m.title, m.year?.toString()))
+          )
+        : selected.map(() => null);
+
       let response = `Found ${results.length} ${type}s in ${input.genre}. Here are some:\n`;
-      for (const item of selected) {
+      for (let i = 0; i < selected.length; i++) {
+        const item = selected[i];
+        const lb = letterboxdRatings[i];
         const watched = item.viewCount ? " [WATCHED]" : "";
         const director = item.directors?.[0] ? ` - Dir: ${item.directors[0]}` : "";
-        response += `- **${item.title}** (${item.year || "?"})${director}${watched}\n`;
+        const rating = lb ? ` ⭐ ${lb.rating}` : "";
+        response += `- **${item.title}** (${item.year || "?"})${rating}${director}${watched}\n`;
       }
       return response;
     }
@@ -204,10 +238,21 @@ export async function processToolCall(
       if (similar.length === 0) {
         return `Couldn't find movies similar to "${input.title}" - the movie may not be in the library.`;
       }
+
+      // Fetch Letterboxd ratings in parallel
+      const letterboxdRatings = externalConfig
+        ? await Promise.all(
+            similar.map(m => externalConfig!.getLetterboxdRating(m.title, m.year?.toString()))
+          )
+        : similar.map(() => null);
+
       let response = `Movies similar to "${input.title}":\n`;
-      for (const movie of similar) {
+      for (let i = 0; i < similar.length; i++) {
+        const movie = similar[i];
+        const lb = letterboxdRatings[i];
         const genres = movie.genres?.slice(0, 2).join(", ") || "";
-        response += `- **${movie.title}** (${movie.year || "?"})${genres ? ` [${genres}]` : ""}\n`;
+        const rating = lb ? ` ⭐ ${lb.rating}` : "";
+        response += `- **${movie.title}** (${movie.year || "?"})${rating}${genres ? ` [${genres}]` : ""}\n`;
       }
       return response;
     }
@@ -247,9 +292,17 @@ export async function processToolCall(
           : `No ${unwatchedOnly ? "unwatched " : ""}movies found in the library.`;
       }
 
+      // Fetch Letterboxd rating
+      const letterboxd = externalConfig
+        ? await externalConfig.getLetterboxdRating(movie.title, movie.year?.toString())
+        : null;
+
       let response = `**The wheel has spoken!**\n\n`;
       response += `**${movie.title}** (${movie.year || "?"})\n\n`;
 
+      if (letterboxd) {
+        response += `**Letterboxd:** ⭐ ${letterboxd.rating}\n`;
+      }
       if (movie.genres && movie.genres.length > 0) {
         response += `**Genre:** ${movie.genres.slice(0, 3).join(", ")}\n`;
       }
