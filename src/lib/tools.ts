@@ -220,5 +220,23 @@ export const tools: Anthropic.Tool[] = [
       },
       required: ["title"]
     }
+  },
+  {
+    name: "get_trailer",
+    description: "Get a YouTube trailer link for a movie or TV show. Use when the user asks to see a trailer, wants to watch a preview, or says 'show me the trailer for X'.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: {
+          type: "string",
+          description: "The movie or TV show title"
+        },
+        year: {
+          type: "string",
+          description: "Optional release year to help find the correct trailer"
+        }
+      },
+      required: ["title"]
+    }
   }
 ];

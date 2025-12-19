@@ -10,6 +10,7 @@ import ChatHeader from "@/components/ChatHeader";
 import ChatInput from "@/components/ChatInput";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import FollowUpChips from "@/components/FollowUpChips";
+import Confetti from "@/components/Confetti";
 import { PlexLibrarySummary } from "@/lib/plex";
 import { useChat } from "@/hooks/useChat";
 
@@ -33,6 +34,7 @@ export default function Home() {
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,7 @@ export default function Home() {
   }, [clearChat]);
 
   const handleRandomPick = useCallback(() => {
+    setShowConfetti(true);
     sendMessage("Spin the wheel!");
   }, [sendMessage]);
 
@@ -97,6 +100,7 @@ export default function Home() {
 
   return (
     <div className="app-height flex flex-col bg-background">
+      <Confetti active={showConfetti} onComplete={() => setShowConfetti(false)} />
       <OfflineIndicator error={libraryError} />
 
       <ChatHeader

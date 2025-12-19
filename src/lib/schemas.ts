@@ -84,6 +84,11 @@ export const LookupMovieExternalInputSchema = z.object({
   year: z.string().optional(),
 });
 
+export const GetTrailerInputSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  year: z.string().optional(),
+});
+
 // Map tool names to their schemas
 export const toolInputSchemas: Record<string, z.ZodSchema> = {
   search_by_person: SearchByPersonInputSchema,
@@ -101,6 +106,7 @@ export const toolInputSchemas: Record<string, z.ZodSchema> = {
   random_movie_picker: RandomMoviePickerInputSchema,
   web_search: WebSearchInputSchema,
   lookup_movie_external: LookupMovieExternalInputSchema,
+  get_trailer: GetTrailerInputSchema,
 };
 
 // Validate tool input

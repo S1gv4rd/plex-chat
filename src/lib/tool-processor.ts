@@ -363,6 +363,14 @@ export async function processToolCall(
       );
     }
 
+    case "get_trailer": {
+      const title = input.title as string;
+      const year = input.year as string | undefined;
+      const searchQuery = year ? `${title} ${year} official trailer` : `${title} official trailer`;
+      const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
+      return `**Watch Trailer:** [${title} - Official Trailer](${youtubeUrl})`;
+    }
+
     default:
       return `Unknown tool: ${toolName}`;
   }
