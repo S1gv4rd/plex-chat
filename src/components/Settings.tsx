@@ -295,7 +295,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
               Plex Token
             </label>
             <input
-              type="password"
+              type="text"
               value={plexToken}
               onChange={(e) => setPlexToken(e.target.value)}
               placeholder="Your Plex Token"
@@ -368,7 +368,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                 Claude API Key
               </label>
               <input
-                type="password"
+                type="text"
                 value={anthropicKey}
                 onChange={(e) => setAnthropicKey(e.target.value)}
                 placeholder="Your Claude API Key"
@@ -387,7 +387,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
                 Google AI API Key
               </label>
               <input
-                type="password"
+                type="text"
                 value={geminiKey}
                 onChange={(e) => setGeminiKey(e.target.value)}
                 placeholder="Your Gemini API key"
