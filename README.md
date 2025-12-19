@@ -6,17 +6,23 @@ A conversational AI assistant for your Plex media library. Ask questions about y
 
 - **Natural Language Search** - Ask "What Tom Hanks movies do I have?" or "Show me sci-fi films from the 90s"
 - **Smart Recommendations** - Get personalized suggestions based on your library and watch history
-- **Random Picker** - "Spin the wheel" for a random movie recommendation
-- **Rotten Tomatoes Ratings** - See critic scores when exploring movie details
+- **Random Picker** - "Spin the wheel" for a random movie recommendation with confetti celebration
+- **Multi-Source Ratings** - Rotten Tomatoes, IMDb, and Letterboxd scores for any movie
+- **External Movie Lookup** - Get info about movies not in your library via OMDB
+- **Web Search** - Search the web for movie information and reviews
+- **Trailer Finder** - Quick links to movie trailers on YouTube
 - **Genre Exploration** - Browse your collection by genre, mood, or theme
 - **Actor/Director Search** - Find all content featuring specific people
 - **Watch History & Stats** - See what you've watched and your viewing patterns
-- **Similar Content** - Find movies like ones you enjoyed
+- **Similar Content** - Find movies like ones you enjoyed (with smart sequel filtering)
 - **Collection Browser** - Explore your curated Plex collections
-- **Chat Persistence** - Conversation history saved locally
+- **Suggested Questions** - Quick-start prompts to help you discover content
+- **Chat Persistence** - Conversation history saved locally (last 50 messages)
 - **Real-time Streaming** - Responses stream in as they're generated
+- **Plex Webhooks** - Auto-refresh cache when your library changes
 - **PWA Support** - Install as an app on mobile devices
 - **Mobile-Friendly** - Optimized for iOS/Android with touch-friendly UI
+- **Security** - Rate limiting, CSRF protection, encrypted credential storage
 
 ## Quick Start
 
@@ -103,14 +109,19 @@ A conversational AI assistant for your Plex media library. Ask questions about y
 "My viewing stats"
 "Movies similar to Inception"
 "What's in my Marvel collection?"
+"Tell me about Oppenheimer" (external lookup)
+"What are critics saying about Dune Part Two?"
+"Find me the trailer for The Batman"
 ```
 
 ## Tech Stack
 
 - **Frontend**: Next.js 16, React 19, Tailwind CSS 4
-- **AI**: Claude (Anthropic API) with tool use
+- **AI**: Google Gemini with function calling
 - **Backend**: Next.js API routes with streaming
+- **Validation**: Zod schema validation
 - **Plex**: Direct Plex Media Server API
+- **External APIs**: OMDB, Letterboxd, DuckDuckGo
 
 ## Deployment
 
@@ -150,8 +161,9 @@ Runs on port 3000 by default.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/chat` | POST | Chat with streaming responses |
-| `/api/library` | GET/POST | Library summary |
-| `/api/webhook` | POST | Plex webhook receiver |
+| `/api/library` | GET/POST | Library summary and stats |
+| `/api/suggestions` | GET | Personalized content suggestions |
+| `/api/webhook` | POST | Plex webhook receiver (cache invalidation) |
 
 ## License
 
