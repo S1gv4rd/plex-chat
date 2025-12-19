@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -38,6 +39,7 @@ const ChatMessage = memo(function ChatMessage({ role, content, isStreaming }: Ch
             <p className="m-0">{content}</p>
           ) : (
             <ReactMarkdown
+              remarkPlugins={[remarkBreaks]}
               components={{
                 p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                 ul: ({ children }) => <ul className="mb-2 ml-4 list-disc marker:text-plex-orange/50">{children}</ul>,
