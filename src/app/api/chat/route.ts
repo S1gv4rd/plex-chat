@@ -704,7 +704,19 @@ export async function POST(request: NextRequest) {
           controller.close();
         } catch (error) {
           console.error("Streaming error:", error);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Something went wrong" })}\n\n`));
+          const errorMessage = error instanceof Error ? error.message : "Something went wrong";
+          let userMessage = "Sorry, something went wrong. Please try again.";
+
+          if (errorMessage.includes("API key not configured")) {
+            userMessage = "Please add your Gemini API key in Settings to use the chat.";
+          } else if (errorMessage.includes("Gemini API error: 400") || errorMessage.includes("API_KEY_INVALID")) {
+            userMessage = "Your Gemini API key is invalid. Please check your key in Settings.";
+          } else if (errorMessage.includes("Gemini API error")) {
+            userMessage = "There was an issue with the AI service. Please try again.";
+          }
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: userMessage })}\n\n`));
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         }
       }
