@@ -386,12 +386,18 @@ function convertToolsToGemini(anthropicTools: Anthropic.Tool[]) {
 }
 
 // Gemini API call with function calling
+interface GeminiFunctionCall {
+  name: string;
+  args: Record<string, unknown>;
+  thoughtSignature?: string;
+}
+
 async function callGemini(
   apiKey: string,
   systemPrompt: string,
   messages: { role: string; content: string }[],
   geminiTools: ReturnType<typeof convertToolsToGemini>
-): Promise<{ text?: string; functionCalls?: { name: string; args: Record<string, unknown> }[] }> {
+): Promise<{ text?: string; functionCalls?: GeminiFunctionCall[]; rawParts?: unknown[] }> {
   const contents = messages.map(m => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -424,7 +430,7 @@ async function callGemini(
   const candidate = data.candidates?.[0];
   const parts = candidate?.content?.parts || [];
 
-  const functionCalls: { name: string; args: Record<string, unknown> }[] = [];
+  const functionCalls: GeminiFunctionCall[] = [];
   let text = "";
 
   for (const part of parts) {
@@ -435,11 +441,16 @@ async function callGemini(
       functionCalls.push({
         name: part.functionCall.name,
         args: part.functionCall.args || {},
+        thoughtSignature: part.thoughtSignature,
       });
     }
   }
 
-  return { text: text || undefined, functionCalls: functionCalls.length > 0 ? functionCalls : undefined };
+  return {
+    text: text || undefined,
+    functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
+    rawParts: parts,
+  };
 }
 
 // Gemini API call with function results
@@ -448,7 +459,7 @@ async function callGeminiWithResults(
   systemPrompt: string,
   contents: unknown[],
   geminiTools: ReturnType<typeof convertToolsToGemini>
-): Promise<{ text?: string; functionCalls?: { name: string; args: Record<string, unknown> }[] }> {
+): Promise<{ text?: string; functionCalls?: GeminiFunctionCall[]; rawParts?: unknown[] }> {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
     {
@@ -476,7 +487,7 @@ async function callGeminiWithResults(
   const candidate = data.candidates?.[0];
   const parts = candidate?.content?.parts || [];
 
-  const functionCalls: { name: string; args: Record<string, unknown> }[] = [];
+  const functionCalls: GeminiFunctionCall[] = [];
   let text = "";
 
   for (const part of parts) {
@@ -487,11 +498,16 @@ async function callGeminiWithResults(
       functionCalls.push({
         name: part.functionCall.name,
         args: part.functionCall.args || {},
+        thoughtSignature: part.thoughtSignature,
       });
     }
   }
 
-  return { text: text || undefined, functionCalls: functionCalls.length > 0 ? functionCalls : undefined };
+  return {
+    text: text || undefined,
+    functionCalls: functionCalls.length > 0 ? functionCalls : undefined,
+    rawParts: parts,
+  };
 }
 
 // System prompt for Claude
@@ -663,11 +679,12 @@ export async function POST(request: NextRequest) {
                 });
               }
 
-              // Add assistant response with function calls
+              // Add assistant response with function calls (use rawParts to preserve thought_signature)
               geminiContents.push({
                 role: "model",
-                parts: response.functionCalls.map(fc => ({
+                parts: response.rawParts || response.functionCalls.map(fc => ({
                   functionCall: { name: fc.name, args: fc.args },
+                  ...(fc.thoughtSignature && { thoughtSignature: fc.thoughtSignature }),
                 })),
               });
 
