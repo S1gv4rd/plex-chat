@@ -595,12 +595,12 @@ export async function POST(request: NextRequest) {
       setCustomCredentials(plexUrl, plexToken);
     }
 
-    // Set OMDB API key if provided
-    setOmdbApiKey(omdbKey || process.env.OMDB_API_KEY || null);
+    // Set OMDB API key if provided (fallback to hardcoded key)
+    setOmdbApiKey(omdbKey || process.env.OMDB_API_KEY || "1f9b5825");
 
     // Configure external lookup functions for tool processor
     setExternalConfig({
-      omdbApiKey: omdbKey || process.env.OMDB_API_KEY || null,
+      omdbApiKey: omdbKey || process.env.OMDB_API_KEY || "1f9b5825",
       webSearch,
       getLetterboxdRating,
       getImdbRating,
