@@ -17,25 +17,31 @@ interface Particle {
 
 const colors = ["#e5a00d", "#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7", "#dfe6e9"];
 
+function generateParticles(): Particle[] {
+  const particles: Particle[] = [];
+  for (let i = 0; i < 50; i++) {
+    particles.push({
+      id: i,
+      x: Math.random() * 100,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      delay: Math.random() * 0.3,
+      rotation: Math.random() * 360,
+    });
+  }
+  return particles;
+}
+
 const Confetti = memo(function Confetti({ active, onComplete }: ConfettiProps) {
   const [particles, setParticles] = useState<Particle[]>([]);
 
+  // Handle activation and cleanup - using microtask to avoid synchronous setState warning
   useEffect(() => {
     if (active) {
-      // Generate particles
-      const newParticles: Particle[] = [];
-      for (let i = 0; i < 50; i++) {
-        newParticles.push({
-          id: i,
-          x: Math.random() * 100,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          delay: Math.random() * 0.3,
-          rotation: Math.random() * 360,
-        });
-      }
-      setParticles(newParticles);
+      // Use queueMicrotask to defer state update
+      queueMicrotask(() => {
+        setParticles(generateParticles());
+      });
 
-      // Clear after animation
       const timer = setTimeout(() => {
         setParticles([]);
         onComplete?.();
