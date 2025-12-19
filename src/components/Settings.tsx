@@ -406,30 +406,6 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
             </div>
           )}
 
-          {/* OMDB API Key */}
-          <div>
-            <label className="block text-sm text-foreground/60 mb-1.5">
-              OMDB API Key <span className="text-foreground/30">(optional)</span>
-            </label>
-            <input
-              type="password"
-              value={omdbKey}
-              onChange={(e) => setOmdbKey(e.target.value)}
-              placeholder="Your OMDB API key"
-              className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-foreground placeholder-foreground/30 focus:outline-none transition-colors ${
-                errors.omdbKey ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-plex-orange/50"
-              }`}
-              aria-invalid={!!errors.omdbKey}
-            />
-            {errors.omdbKey ? (
-              <p className="text-xs text-red-400 mt-1">{errors.omdbKey}</p>
-            ) : (
-              <p className="text-xs text-foreground/30 mt-1">
-                For external movie ratings. Free at omdbapi.com
-              </p>
-            )}
-          </div>
-
           {/* Info */}
           <p className="text-xs text-foreground/30 pt-2">
             Settings are stored locally in your browser. Leave blank to use server environment variables.
