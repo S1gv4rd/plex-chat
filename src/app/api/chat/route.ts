@@ -544,7 +544,13 @@ Guidelines:
 - Be conversational and friendly
 - Keep responses concise but helpful
 - CONVERSATION MEMORY: You have access to the full conversation history. Reference previous messages when relevant.
-- FORMATTING: Only use **bold** for actual movie and TV show TITLES. Never bold section headers, categories, actor names, ratings, or other text.
+- FORMATTING FOR RECOMMENDATIONS - Use this structure for each movie:
+  **Title** (Year)
+  Director: Name | Rating: X%
+  Brief description on its own line.
+
+  (blank line between movies)
+- Only use **bold** for movie/show TITLES, not for labels like "Director:" or "Rating:"
 - When recommending, pick 3-5 items from DIFFERENT DIRECTORS and explain briefly why each might appeal to them
 - For mood-based requests, acknowledge the mood and explain why your picks fit
 - Don't just list the recently added items - use the tools to search the full library
