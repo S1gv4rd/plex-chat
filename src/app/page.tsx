@@ -9,6 +9,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import ChatHeader from "@/components/ChatHeader";
 import ChatInput from "@/components/ChatInput";
 import OfflineIndicator from "@/components/OfflineIndicator";
+import FollowUpChips from "@/components/FollowUpChips";
 import { PlexLibrarySummary } from "@/lib/plex";
 import { useChat } from "@/hooks/useChat";
 
@@ -132,6 +133,9 @@ export default function Home() {
               ))}
               {streamingContent && <ChatMessage role="assistant" content={streamingContent} isStreaming />}
               {isLoading && !streamingContent && <TypingIndicator status={loadingStatus || undefined} />}
+              {!isLoading && !streamingContent && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
+                <FollowUpChips onSelect={sendMessage} />
+              )}
               <div ref={messagesEndRef} />
             </>
           )}

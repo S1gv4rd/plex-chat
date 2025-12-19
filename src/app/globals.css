@@ -165,6 +165,16 @@ input, textarea, select {
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+/* Simple fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
 /* Focus indicators for accessibility */
 button:focus-visible,
 a:focus-visible,
