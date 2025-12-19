@@ -227,21 +227,15 @@ export async function decryptValue(ciphertext: string): Promise<string> {
 export async function encryptSettings(settings: {
   plexUrl: string;
   plexToken: string;
-  anthropicKey: string;
-  omdbKey: string;
 }): Promise<string> {
-  const [plexUrl, plexToken, anthropicKey, omdbKey] = await Promise.all([
+  const [plexUrl, plexToken] = await Promise.all([
     encryptValue(settings.plexUrl),
     encryptValue(settings.plexToken),
-    encryptValue(settings.anthropicKey),
-    encryptValue(settings.omdbKey),
   ]);
 
   return JSON.stringify({
     plexUrl,
     plexToken,
-    anthropicKey,
-    omdbKey,
     _encrypted: true,
   });
 }
@@ -250,8 +244,6 @@ export async function encryptSettings(settings: {
 export async function decryptSettings(stored: string): Promise<{
   plexUrl: string;
   plexToken: string;
-  anthropicKey: string;
-  omdbKey: string;
 } | null> {
   try {
     const parsed = JSON.parse(stored);
@@ -261,19 +253,15 @@ export async function decryptSettings(stored: string): Promise<{
       return {
         plexUrl: parsed.plexUrl || "",
         plexToken: parsed.plexToken || "",
-        anthropicKey: parsed.anthropicKey || "",
-        omdbKey: parsed.omdbKey || "",
       };
     }
 
-    const [plexUrl, plexToken, anthropicKey, omdbKey] = await Promise.all([
+    const [plexUrl, plexToken] = await Promise.all([
       decryptValue(parsed.plexUrl),
       decryptValue(parsed.plexToken),
-      decryptValue(parsed.anthropicKey),
-      decryptValue(parsed.omdbKey),
     ]);
 
-    return { plexUrl, plexToken, anthropicKey, omdbKey };
+    return { plexUrl, plexToken };
   } catch {
     return null;
   }

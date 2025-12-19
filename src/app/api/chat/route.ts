@@ -360,18 +360,6 @@ async function lookupMovieExternal(title: string, year?: string): Promise<string
   }
 }
 
-// Default Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-function getAnthropicClient(customKey?: string): Anthropic {
-  if (customKey) {
-    return new Anthropic({ apiKey: customKey });
-  }
-  return anthropic;
-}
-
 // Convert Anthropic tools to Gemini format
 function convertToolsToGemini(anthropicTools: Anthropic.Tool[]) {
   return anthropicTools.map(tool => ({
@@ -604,19 +592,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { messages, plexUrl, plexToken, anthropicKey, geminiKey, omdbKey, model = "claude" } = validation.data;
+    const { messages, plexUrl, plexToken } = validation.data;
 
     // Set custom Plex credentials if provided
     if (plexUrl || plexToken) {
       setCustomCredentials(plexUrl, plexToken);
     }
 
-    // Set OMDB API key if provided (fallback to hardcoded key)
-    setOmdbApiKey(omdbKey || process.env.OMDB_API_KEY || "1f9b5825");
+    // Set OMDB API key (hardcoded)
+    const omdbApiKey = process.env.OMDB_API_KEY || "1f9b5825";
+    setOmdbApiKey(omdbApiKey);
 
     // Configure external lookup functions for tool processor
     setExternalConfig({
-      omdbApiKey: omdbKey || process.env.OMDB_API_KEY || "1f9b5825",
+      omdbApiKey,
       webSearch,
       getLetterboxdRating,
       getImdbRating,
@@ -644,136 +633,60 @@ export async function POST(request: NextRequest) {
         try {
           let finalText = "";
 
-          if (model === "gemini") {
-            // ===== GEMINI PATH =====
-            const geminiApiKey = geminiKey || process.env.GEMINI_API_KEY || "AIzaSyCPL5pTVeWKVSKJYTmBYMwDgOE4K9OaPg0";
-            if (!geminiApiKey) {
-              throw new Error("Gemini API key not configured");
+          // Gemini API (hardcoded key)
+          const geminiApiKey = process.env.GEMINI_API_KEY || "AIzaSyCPL5pTVeWKVSKJYTmBYMwDgOE4K9OaPg0";
+          const geminiTools = convertToolsToGemini(tools);
+
+          // Build Gemini contents
+          const geminiContents: unknown[] = messages.map(m => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          }));
+
+          let response = await callGemini(geminiApiKey, systemPrompt, messages, geminiTools);
+
+          // Handle function calling loop
+          let maxIterations = 10;
+          while (response.functionCalls && response.functionCalls.length > 0 && maxIterations > 0) {
+            maxIterations--;
+
+            // Show loading indicator
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
+
+            // Process function calls
+            const functionResponses: { name: string; response: { result: string } }[] = [];
+            for (const fc of response.functionCalls) {
+              const result = await processToolCall(fc.name, fc.args);
+              functionResponses.push({
+                name: fc.name,
+                response: { result },
+              });
             }
 
-            const geminiTools = convertToolsToGemini(tools);
-
-            // Build Gemini contents
-            const geminiContents: unknown[] = messages.map(m => ({
-              role: m.role === "assistant" ? "model" : "user",
-              parts: [{ text: m.content }],
-            }));
-
-            let response = await callGemini(geminiApiKey, systemPrompt, messages, geminiTools);
-
-            // Handle function calling loop
-            let maxIterations = 10;
-            while (response.functionCalls && response.functionCalls.length > 0 && maxIterations > 0) {
-              maxIterations--;
-
-              // Show loading indicator
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
-
-              // Process function calls
-              const functionResponses: { name: string; response: { result: string } }[] = [];
-              for (const fc of response.functionCalls) {
-                const result = await processToolCall(fc.name, fc.args);
-                functionResponses.push({
-                  name: fc.name,
-                  response: { result },
-                });
-              }
-
-              // Add assistant response with function calls (use rawParts to preserve thought_signature)
-              geminiContents.push({
-                role: "model",
-                parts: response.rawParts || response.functionCalls.map(fc => ({
-                  functionCall: { name: fc.name, args: fc.args },
-                  ...(fc.thoughtSignature && { thoughtSignature: fc.thoughtSignature }),
-                })),
-              });
-
-              // Add function results
-              geminiContents.push({
-                role: "user",
-                parts: functionResponses.map(fr => ({
-                  functionResponse: fr,
-                })),
-              });
-
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
-
-              // Call again with results
-              response = await callGeminiWithResults(geminiApiKey, systemPrompt, geminiContents, geminiTools);
-            }
-
-            finalText = response.text || "I couldn't generate a response.";
-          } else {
-            // ===== CLAUDE PATH =====
-            const client = getAnthropicClient(anthropicKey);
-
-            // Build messages for API
-            const apiMessages: Anthropic.MessageParam[] = messages.map((m) => ({
-              role: m.role,
-              content: m.content,
-            }));
-
-            // Initial API call
-            let response = await client.messages.create({
-              model: "claude-haiku-4-5-20251001",
-              max_tokens: 1024,
-              system: systemPrompt,
-              tools: tools,
-              messages: apiMessages,
+            // Add assistant response with function calls (use rawParts to preserve thought_signature)
+            geminiContents.push({
+              role: "model",
+              parts: response.rawParts || response.functionCalls.map(fc => ({
+                functionCall: { name: fc.name, args: fc.args },
+                ...(fc.thoughtSignature && { thoughtSignature: fc.thoughtSignature }),
+              })),
             });
 
-            // Handle tool use loop
-            while (response.stop_reason === "tool_use") {
-              const toolUseBlocks = response.content.filter(
-                (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-              );
+            // Add function results
+            geminiContents.push({
+              role: "user",
+              parts: functionResponses.map(fr => ({
+                functionResponse: fr,
+              })),
+            });
 
-              if (toolUseBlocks.length === 0) break;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
 
-              // Show loading indicator
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
-
-              // Process all tool calls with validation
-              const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-                toolUseBlocks.map(async (toolUseBlock) => {
-                  const toolResult = await processToolCall(
-                    toolUseBlock.name,
-                    toolUseBlock.input
-                  );
-                  return {
-                    type: "tool_result" as const,
-                    tool_use_id: toolUseBlock.id,
-                    content: toolResult,
-                  };
-                })
-              );
-
-              apiMessages.push({
-                role: "assistant",
-                content: response.content,
-              });
-              apiMessages.push({
-                role: "user",
-                content: toolResults,
-              });
-
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
-
-              response = await client.messages.create({
-                model: "claude-haiku-4-5-20251001",
-                max_tokens: 1024,
-                system: systemPrompt,
-                tools: tools,
-                messages: apiMessages,
-              });
-            }
-
-            // Extract the final text response
-            const textBlock = response.content.find(
-              (block): block is Anthropic.TextBlock => block.type === "text"
-            );
-            finalText = textBlock?.text || "I couldn't generate a response.";
+            // Call again with results
+            response = await callGeminiWithResults(geminiApiKey, systemPrompt, geminiContents, geminiTools);
           }
+
+          finalText = response.text || "I couldn't generate a response.";
 
           // Clear status before streaming text
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: null })}\n\n`));

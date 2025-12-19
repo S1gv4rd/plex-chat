@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { encryptSettings, decryptSettings, clearCryptoKeys } from "@/lib/crypto";
-import { isValidUrl, isValidPlexToken, isValidAnthropicKey, isValidOmdbKey } from "@/lib/utils";
+import { isValidUrl, isValidPlexToken } from "@/lib/utils";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 
 interface SettingsProps {
@@ -13,24 +13,14 @@ interface SettingsProps {
 
 const SETTINGS_KEY = "plex-chat-settings";
 
-export type ModelProvider = "claude" | "gemini";
-
 export interface AppSettings {
   plexUrl: string;
   plexToken: string;
-  anthropicKey: string;
-  geminiKey: string;
-  omdbKey: string;
-  model: ModelProvider;
 }
 
 const emptySettings: AppSettings = {
   plexUrl: "",
   plexToken: "",
-  anthropicKey: "",
-  geminiKey: "",
-  omdbKey: "",
-  model: "gemini",
 };
 
 // Async function to get settings (decrypts from storage)
@@ -59,18 +49,11 @@ export async function saveSettingsAsync(settings: AppSettings): Promise<void> {
 interface ValidationErrors {
   plexUrl?: string;
   plexToken?: string;
-  anthropicKey?: string;
-  geminiKey?: string;
-  omdbKey?: string;
 }
 
 export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const [plexUrl, setPlexUrl] = useState("");
   const [plexToken, setPlexToken] = useState("");
-  const [anthropicKey, setAnthropicKey] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
-  const [omdbKey, setOmdbKey] = useState("");
-  const [model, setModel] = useState<ModelProvider>("claude");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -90,20 +73,10 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
     if (!isValidPlexToken(plexToken)) {
       newErrors.plexToken = "Token should be at least 10 alphanumeric characters";
     }
-    // Validate API key based on selected model
-    if (model === "claude" && !isValidAnthropicKey(anthropicKey)) {
-      newErrors.anthropicKey = "Key should start with 'sk-ant-'";
-    }
-    if (model === "gemini" && geminiKey && geminiKey.length < 20) {
-      newErrors.geminiKey = "Key should be at least 20 characters";
-    }
-    if (!isValidOmdbKey(omdbKey)) {
-      newErrors.omdbKey = "Key should be at least 8 alphanumeric characters";
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [plexUrl, plexToken, anthropicKey, geminiKey, omdbKey, model]);
+  }, [plexUrl, plexToken]);
 
   // Load settings asynchronously (with decryption)
   const loadSettings = useCallback(async () => {
@@ -112,10 +85,6 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
       const settings = await getSettingsAsync();
       setPlexUrl(settings.plexUrl);
       setPlexToken(settings.plexToken);
-      setAnthropicKey(settings.anthropicKey);
-      setGeminiKey(settings.geminiKey || "");
-      setOmdbKey(settings.omdbKey || "");
-      setModel(settings.model || "claude");
     } catch (error) {
       console.error("Failed to load settings:", error);
     } finally {
@@ -205,7 +174,7 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
 
     setLoading(true);
     try {
-      await saveSettingsAsync({ plexUrl, plexToken, anthropicKey, geminiKey, omdbKey, model });
+      await saveSettingsAsync({ plexUrl, plexToken });
       setSaved(true);
       setTimeout(() => {
         onSave();
@@ -219,15 +188,11 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   };
 
   const handleClear = async () => {
-    if (!window.confirm("Clear all settings? This will remove your API keys and Plex credentials.")) {
+    if (!window.confirm("Clear all settings? This will remove your Plex credentials.")) {
       return;
     }
     setPlexUrl("");
     setPlexToken("");
-    setAnthropicKey("");
-    setGeminiKey("");
-    setOmdbKey("");
-    setModel("claude");
     setErrors({});
     localStorage.removeItem(SETTINGS_KEY);
     // Also clear encryption keys for complete cleanup

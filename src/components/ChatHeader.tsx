@@ -2,7 +2,6 @@
 
 import { memo } from "react";
 import { PlexLibrarySummary } from "@/lib/plex";
-import { ModelProvider } from "./Settings";
 import LibraryStats from "./LibraryStats";
 
 interface ChatHeaderProps {
@@ -10,7 +9,6 @@ interface ChatHeaderProps {
   libraryError: string | null;
   librarySummary: PlexLibrarySummary | null;
   libraryLoading: boolean;
-  currentModel: ModelProvider;
   onResetChat: () => void;
   onRandomPick: () => void;
   onOpenSettings: () => void;
@@ -21,7 +19,6 @@ const ChatHeader = memo(function ChatHeader({
   libraryError,
   librarySummary,
   libraryLoading,
-  currentModel,
   onResetChat,
   onRandomPick,
   onOpenSettings,

@@ -187,10 +187,6 @@ export function useChat() {
           messages: [...messages, userMessage],
           plexUrl: settings.plexUrl || undefined,
           plexToken: settings.plexToken || undefined,
-          anthropicKey: settings.anthropicKey || undefined,
-          geminiKey: settings.geminiKey || undefined,
-          omdbKey: settings.omdbKey || undefined,
-          model: settings.model || "claude",
         }),
         signal: controller.signal,
       });
