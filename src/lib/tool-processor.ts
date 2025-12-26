@@ -15,7 +15,22 @@ import {
 } from "@/lib/plex";
 import { diversifyByDirector } from "@/lib/plex-search";
 import { shuffle } from "@/lib/utils";
-import { validateToolInput } from "@/lib/schemas";
+import {
+  validateToolInput,
+  type SearchByPersonInput,
+  type SearchLibraryInput,
+  type GetRecommendationsInput,
+  type GetTvRecommendationsInput,
+  type SearchByGenreInput,
+  type GetWatchHistoryInput,
+  type GetSimilarMoviesInput,
+  type GetCollectionItemsInput,
+  type GetMediaDetailsInput,
+  type RandomMoviePickerInput,
+  type WebSearchInput,
+  type LookupMovieExternalInput,
+  type GetTrailerInput,
+} from "@/lib/schemas";
 
 // External API functions
 export interface ExternalLookupConfig {
@@ -43,11 +58,12 @@ export async function processToolCall(
     return `Invalid input for ${toolName}: ${validation.error}`;
   }
 
-  const input = validation.data as Record<string, unknown>;
+  const validatedInput = validation.data;
 
   switch (toolName) {
     case "search_by_person": {
-      const results = await searchByPerson(input.name as string);
+      const input = validatedInput as SearchByPersonInput;
+      const results = await searchByPerson(input.name);
       if (results.movies.length === 0 && results.shows.length === 0) {
         return `No movies or shows found featuring "${input.name}" in the library.`;
       }
@@ -84,7 +100,8 @@ export async function processToolCall(
     }
 
     case "search_library": {
-      const results = await searchLibrary(input.query as string);
+      const input = validatedInput as SearchLibraryInput;
+      const results = await searchLibrary(input.query);
       if (results.length === 0) {
         return `No results found for "${input.query}" in the library.`;
       }
@@ -98,8 +115,9 @@ export async function processToolCall(
     }
 
     case "get_recommendations": {
-      const count = (input.count as number) || 5;
-      const genre = input.genre as string | undefined;
+      const input = validatedInput as GetRecommendationsInput;
+      const count = input.count ?? 5;
+      const genre = input.genre;
       const movies = await getUnwatchedMovies(count, genre);
       if (movies.length === 0) {
         return genre
@@ -130,8 +148,9 @@ export async function processToolCall(
     }
 
     case "get_tv_recommendations": {
-      const count = (input.count as number) || 5;
-      const genre = input.genre as string | undefined;
+      const input = validatedInput as GetTvRecommendationsInput;
+      const count = input.count ?? 5;
+      const genre = input.genre;
       const shows = await getUnwatchedShows(count, genre);
       if (shows.length === 0) {
         return genre
@@ -150,8 +169,9 @@ export async function processToolCall(
     }
 
     case "search_by_genre": {
-      const type = (input.type as "movie" | "show") || "movie";
-      const results = await searchByGenre(input.genre as string, type);
+      const input = validatedInput as SearchByGenreInput;
+      const type = input.type ?? "movie";
+      const results = await searchByGenre(input.genre, type);
       if (results.length === 0) {
         return `No ${type}s found in the ${input.genre} genre.`;
       }
@@ -180,7 +200,8 @@ export async function processToolCall(
     }
 
     case "get_watch_history": {
-      const limit = (input.limit as number) || 20;
+      const input = validatedInput as GetWatchHistoryInput;
+      const limit = input.limit ?? 20;
       const history = await getWatchHistory(limit);
       if (history.length === 0) {
         return "No watch history found.";
@@ -233,8 +254,9 @@ export async function processToolCall(
     }
 
     case "get_similar_movies": {
-      const count = (input.count as number) || 5;
-      const similar = await getSimilarMovies(input.title as string, count);
+      const input = validatedInput as GetSimilarMoviesInput;
+      const count = input.count ?? 5;
+      const similar = await getSimilarMovies(input.title, count);
       if (similar.length === 0) {
         return `Couldn't find movies similar to "${input.title}" - the movie may not be in the library.`;
       }
@@ -270,7 +292,8 @@ export async function processToolCall(
     }
 
     case "get_collection_items": {
-      const items = await getCollectionItems(input.collection as string);
+      const input = validatedInput as GetCollectionItemsInput;
+      const items = await getCollectionItems(input.collection);
       if (items.length === 0) {
         return `Collection "${input.collection}" not found or is empty.`;
       }
@@ -282,8 +305,9 @@ export async function processToolCall(
     }
 
     case "random_movie_picker": {
-      const unwatchedOnly = input.unwatched_only === undefined ? true : Boolean(input.unwatched_only);
-      const genre = input.genre as string | undefined;
+      const input = validatedInput as RandomMoviePickerInput;
+      const unwatchedOnly = input.unwatched_only ?? true;
+      const genre = input.genre;
       const movie = await pickRandomMovie(unwatchedOnly, genre);
 
       if (!movie) {
@@ -321,7 +345,8 @@ export async function processToolCall(
     }
 
     case "get_media_details": {
-      const details = await getMediaDetails(input.title as string);
+      const input = validatedInput as GetMediaDetailsInput;
+      const details = await getMediaDetails(input.title);
       if (!details) {
         return `Could not find "${input.title}" in the library.`;
       }
@@ -400,25 +425,25 @@ export async function processToolCall(
     }
 
     case "web_search": {
+      const input = validatedInput as WebSearchInput;
       if (!externalConfig) {
         return "Web search is not configured.";
       }
-      return await externalConfig.webSearch(input.query as string);
+      return await externalConfig.webSearch(input.query);
     }
 
     case "lookup_movie_external": {
+      const input = validatedInput as LookupMovieExternalInput;
       if (!externalConfig) {
         return "External movie lookup is not configured.";
       }
-      return await externalConfig.lookupMovieExternal(
-        input.title as string,
-        input.year as string | undefined
-      );
+      return await externalConfig.lookupMovieExternal(input.title, input.year);
     }
 
     case "get_trailer": {
-      const title = input.title as string;
-      const year = input.year as string | undefined;
+      const input = validatedInput as GetTrailerInput;
+      const title = input.title;
+      const year = input.year;
       const searchQuery = year ? `${title} ${year} official trailer` : `${title} official trailer`;
       const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
       return `**Watch Trailer:** [${title} - Official Trailer](${youtubeUrl})`;

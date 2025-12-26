@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { shuffle, isValidUrl, isValidPlexToken, isValidGeminiKey, isValidOmdbKey } from "@/lib/utils";
+import { describe, it, expect, vi } from "vitest";
+import { shuffle, isValidUrl, isValidPlexToken, isValidGeminiKey, isValidOmdbKey, withRetry, isRetryableError } from "@/lib/utils";
 
 describe("shuffle", () => {
   it("returns an array of the same length", () => {
@@ -104,5 +104,65 @@ describe("isValidOmdbKey", () => {
 
   it("rejects keys with invalid characters", () => {
     expect(isValidOmdbKey("key-with-dashes")).toBe(false);
+  });
+});
+
+describe("withRetry", () => {
+  it("returns result on first successful attempt", async () => {
+    const fn = vi.fn().mockResolvedValue("success");
+    const result = await withRetry(fn, 3, 10);
+    expect(result).toBe("success");
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries on failure and succeeds", async () => {
+    const fn = vi.fn()
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockResolvedValue("success");
+    const result = await withRetry(fn, 3, 10);
+    expect(result).toBe("success");
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws after max retries", async () => {
+    const fn = vi.fn().mockRejectedValue(new Error("always fails"));
+    await expect(withRetry(fn, 2, 10)).rejects.toThrow("always fails");
+    expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+
+  it("respects shouldRetry predicate", async () => {
+    const fn = vi.fn().mockRejectedValue(new Error("non-retryable"));
+    const shouldRetry = vi.fn().mockReturnValue(false);
+    await expect(withRetry(fn, 3, 10, shouldRetry)).rejects.toThrow("non-retryable");
+    expect(fn).toHaveBeenCalledTimes(1); // No retries when shouldRetry returns false
+    expect(shouldRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isRetryableError", () => {
+  it("returns true for network errors", () => {
+    expect(isRetryableError(new Error("fetch failed"))).toBe(true);
+    expect(isRetryableError(new Error("network error"))).toBe(true);
+  });
+
+  it("returns true for timeout errors", () => {
+    expect(isRetryableError(new Error("timeout reached"))).toBe(true);
+    expect(isRetryableError(new Error("ETIMEDOUT"))).toBe(true);
+  });
+
+  it("returns true for connection errors", () => {
+    expect(isRetryableError(new Error("ECONNREFUSED"))).toBe(true);
+    expect(isRetryableError(new Error("ECONNRESET"))).toBe(true);
+  });
+
+  it("returns false for non-retryable errors", () => {
+    expect(isRetryableError(new Error("validation failed"))).toBe(false);
+    expect(isRetryableError(new Error("not found"))).toBe(false);
+  });
+
+  it("returns false for non-Error values", () => {
+    expect(isRetryableError("string error")).toBe(false);
+    expect(isRetryableError(null)).toBe(false);
+    expect(isRetryableError(undefined)).toBe(false);
   });
 });

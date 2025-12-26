@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { encryptSettings, decryptSettings, clearCryptoKeys, isEncryptionAvailable } from "@/lib/crypto";
 import { isValidUrl, isValidPlexToken, isValidGeminiKey, isValidOmdbKey } from "@/lib/utils";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface SettingsProps {
   isOpen: boolean;
@@ -72,12 +73,41 @@ export default function Settings({ isOpen, onClose, onSave }: SettingsProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
+  // Debounce input values for validation (300ms delay)
+  const debouncedPlexUrl = useDebounce(plexUrl, 300);
+  const debouncedPlexToken = useDebounce(plexToken, 300);
+  const debouncedGeminiKey = useDebounce(geminiKey, 300);
+  const debouncedOmdbKey = useDebounce(omdbKey, 300);
+
   // Check encryption availability on mount
   useEffect(() => {
     setEncryptionWarning(!isEncryptionAvailable());
   }, []);
 
-  // Validate all fields and return true if valid
+  // Debounced validation - runs when debounced values change
+  useEffect(() => {
+    // Skip validation if modal just opened or fields are empty
+    if (!isOpen) return;
+
+    const newErrors: ValidationErrors = {};
+
+    if (debouncedPlexUrl && !isValidUrl(debouncedPlexUrl)) {
+      newErrors.plexUrl = "Enter a valid URL (http:// or https://)";
+    }
+    if (debouncedPlexToken && !isValidPlexToken(debouncedPlexToken)) {
+      newErrors.plexToken = "Token should be at least 10 alphanumeric characters";
+    }
+    if (debouncedGeminiKey && !isValidGeminiKey(debouncedGeminiKey)) {
+      newErrors.geminiKey = "Invalid Gemini API key format";
+    }
+    if (debouncedOmdbKey && !isValidOmdbKey(debouncedOmdbKey)) {
+      newErrors.omdbKey = "Key should be at least 8 alphanumeric characters";
+    }
+
+    setErrors(newErrors);
+  }, [isOpen, debouncedPlexUrl, debouncedPlexToken, debouncedGeminiKey, debouncedOmdbKey]);
+
+  // Validate all fields and return true if valid (used on save)
   const validate = useCallback((): boolean => {
     const newErrors: ValidationErrors = {};
 

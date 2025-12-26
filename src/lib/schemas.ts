@@ -107,8 +107,43 @@ export const toolInputSchemas: Record<string, z.ZodSchema> = {
   get_trailer: GetTrailerInputSchema,
 };
 
-// Validate tool input
-export function validateToolInput(toolName: string, input: unknown): { success: true; data: unknown } | { success: false; error: string } {
+// Inferred types for tool inputs
+export type SearchByPersonInput = z.infer<typeof SearchByPersonInputSchema>;
+export type SearchLibraryInput = z.infer<typeof SearchLibraryInputSchema>;
+export type GetRecommendationsInput = z.infer<typeof GetRecommendationsInputSchema>;
+export type GetTvRecommendationsInput = z.infer<typeof GetTvRecommendationsInputSchema>;
+export type SearchByGenreInput = z.infer<typeof SearchByGenreInputSchema>;
+export type GetWatchHistoryInput = z.infer<typeof GetWatchHistoryInputSchema>;
+export type GetSimilarMoviesInput = z.infer<typeof GetSimilarMoviesInputSchema>;
+export type GetCollectionItemsInput = z.infer<typeof GetCollectionItemsInputSchema>;
+export type GetMediaDetailsInput = z.infer<typeof GetMediaDetailsInputSchema>;
+export type RandomMoviePickerInput = z.infer<typeof RandomMoviePickerInputSchema>;
+export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
+export type LookupMovieExternalInput = z.infer<typeof LookupMovieExternalInputSchema>;
+export type GetTrailerInput = z.infer<typeof GetTrailerInputSchema>;
+
+// Union type of all tool inputs
+export type ToolInput =
+  | SearchByPersonInput
+  | SearchLibraryInput
+  | GetRecommendationsInput
+  | GetTvRecommendationsInput
+  | SearchByGenreInput
+  | GetWatchHistoryInput
+  | GetSimilarMoviesInput
+  | GetCollectionItemsInput
+  | GetMediaDetailsInput
+  | RandomMoviePickerInput
+  | WebSearchInput
+  | LookupMovieExternalInput
+  | GetTrailerInput
+  | Record<string, never>; // For tools with no input
+
+// Validate tool input with typed result
+export function validateToolInput(
+  toolName: string,
+  input: unknown
+): { success: true; data: ToolInput } | { success: false; error: string } {
   const schema = toolInputSchemas[toolName];
   if (!schema) {
     return { success: false, error: `Unknown tool: ${toolName}` };
@@ -121,5 +156,5 @@ export function validateToolInput(toolName: string, input: unknown): { success: 
     return { success: false, error: issues.map((e: { message: string }) => e.message).join(", ") };
   }
 
-  return { success: true, data: result.data };
+  return { success: true, data: result.data as ToolInput };
 }

@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { ChatRequestSchema } from "@/lib/schemas";
 import { tools } from "@/lib/tools";
 import { processToolCall, setExternalConfig } from "@/lib/tool-processor";
+import { withRetry, isRetryableError } from "@/lib/utils";
 
 // Simple in-memory rate limiter with lazy cleanup
 const RATE_LIMIT = {
@@ -82,7 +83,7 @@ function verifyCsrf(request: NextRequest): boolean {
   }
 }
 
-// Web search using DuckDuckGo HTML with robust fallback parsing
+// Web search using DuckDuckGo HTML with robust fallback parsing and retry
 async function webSearch(query: string, maxResults: number = 5): Promise<string> {
   const parseStrategies = [
     // Strategy 1: Standard DuckDuckGo result structure
@@ -132,21 +133,33 @@ async function webSearch(query: string, maxResults: number = 5): Promise<string>
 
   try {
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
+
+    // Use retry for transient failures
+    const html = await withRetry(
+      async () => {
+        const response = await fetch(searchUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!response.ok) {
+          // Retry on 5xx errors
+          if (response.status >= 500) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.text();
       },
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      console.error(`[WebSearch] DuckDuckGo returned status ${response.status}`);
-      return `Search temporarily unavailable (status ${response.status}). Try again in a moment.`;
-    }
-
-    const html = await response.text();
+      2, // max 2 retries
+      1000, // 1s base delay
+      isRetryableError
+    );
 
     let results: { title: string; snippet: string; url: string }[] = [];
     for (const strategy of parseStrategies) {
@@ -178,7 +191,7 @@ async function webSearch(query: string, maxResults: number = 5): Promise<string>
   }
 }
 
-// Letterboxd rating scraper
+// Letterboxd rating scraper with retry
 async function getLetterboxdRating(title: string, year?: string): Promise<{ rating: string; url: string } | null> {
   const generateSlug = (t: string): string => {
     return t
@@ -211,20 +224,32 @@ async function getLetterboxdRating(title: string, year?: string): Promise<{ rati
 
   for (const url of urls) {
     try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      const html = await withRetry(
+        async () => {
+          const response = await fetch(url, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+            signal: AbortSignal.timeout(8000),
+          });
+
+          if (!response.ok) {
+            if (response.status === 404) {
+              throw new Error("NOT_FOUND"); // Don't retry 404s
+            }
+            if (response.status >= 500) {
+              throw new Error(`Server error: ${response.status}`);
+            }
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          return response.text();
         },
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) continue;
-        continue;
-      }
-
-      const html = await response.text();
+        1, // max 1 retry for Letterboxd
+        500,
+        (error) => isRetryableError(error) && !(error instanceof Error && error.message === "NOT_FOUND")
+      );
 
       for (const pattern of ratingPatterns) {
         const match = html.match(pattern);
@@ -239,7 +264,11 @@ async function getLetterboxdRating(title: string, year?: string): Promise<{ rati
       if (html.includes('class="film-poster"') || html.includes('data-film-slug')) {
         return null;
       }
-    } catch {
+    } catch (error) {
+      // Skip to next URL on 404 or other errors
+      if (error instanceof Error && error.message === "NOT_FOUND") {
+        continue;
+      }
       continue;
     }
   }
@@ -654,22 +683,44 @@ export async function POST(request: NextRequest) {
 
           let response = await callGemini(geminiApiKey, systemPrompt, messages, geminiTools);
 
-          // Handle function calling loop
+          // Handle function calling loop with operation-level timeout
+          const TOOL_LOOP_TIMEOUT = 45000; // 45 seconds max for entire tool loop
+          const toolLoopStart = Date.now();
           let maxIterations = 10;
+
           while (response.functionCalls && response.functionCalls.length > 0 && maxIterations > 0) {
+            // Check operation timeout
+            if (Date.now() - toolLoopStart > TOOL_LOOP_TIMEOUT) {
+              console.warn("[Chat] Tool loop timeout reached");
+              break;
+            }
+
             maxIterations--;
 
             // Show loading indicator
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "" })}\n\n`));
 
-            // Process function calls
+            // Process function calls with individual timeouts
             const functionResponses: { name: string; response: { result: string } }[] = [];
             for (const fc of response.functionCalls) {
-              const result = await processToolCall(fc.name, fc.args);
-              functionResponses.push({
-                name: fc.name,
-                response: { result },
-              });
+              try {
+                const result = await Promise.race([
+                  processToolCall(fc.name, fc.args),
+                  new Promise<string>((_, reject) =>
+                    setTimeout(() => reject(new Error("Tool call timeout")), 15000)
+                  ),
+                ]);
+                functionResponses.push({
+                  name: fc.name,
+                  response: { result },
+                });
+              } catch (toolError) {
+                console.error(`[Chat] Tool ${fc.name} error:`, toolError);
+                functionResponses.push({
+                  name: fc.name,
+                  response: { result: `Error executing ${fc.name}: timeout or failure` },
+                });
+              }
             }
 
             // Add assistant response with function calls (use rawParts to preserve thought_signature)

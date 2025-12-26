@@ -43,9 +43,11 @@ import type {
 import {
   CACHE_TTL,
   isCacheWarmedUp,
-  setCacheWarmedUp,
   getWarmupPromise,
   setWarmupPromise,
+  tryStartWarmup,
+  completeWarmup,
+  failWarmup,
 } from "./plex-cache";
 import {
   plexFetch,
@@ -180,8 +182,15 @@ export async function warmupCache(): Promise<void> {
     return existingPromise;
   }
 
+  // Atomically try to start warmup - prevents race conditions
+  if (!tryStartWarmup()) {
+    // Another caller started warmup between our checks, wait for it
+    const promise = getWarmupPromise();
+    if (promise) return promise;
+    return; // Already warmed up
+  }
+
   // Create and register the promise SYNCHRONOUSLY before any async work
-  // This prevents race conditions where two calls both pass the check above
   let resolveWarmup: () => void;
   let rejectWarmup: (error: unknown) => void;
   const warmupPromise = new Promise<void>((resolve, reject) => {
@@ -189,7 +198,7 @@ export async function warmupCache(): Promise<void> {
     rejectWarmup = reject;
   });
 
-  // Set immediately to prevent concurrent warmups
+  // Set immediately to allow other callers to await
   setWarmupPromise(warmupPromise);
 
   // Now do the async work
@@ -232,12 +241,13 @@ export async function warmupCache(): Promise<void> {
 
     await Promise.all(contentFetches);
 
-    setCacheWarmedUp(true);
+    completeWarmup();
     const elapsed = Date.now() - startTime;
     logDebug(`[Plex Cache] Warmup complete in ${elapsed}ms`);
     resolveWarmup!();
   } catch (error) {
     console.error("[Plex Cache] Warmup failed:", error);
+    failWarmup(); // Allow retry on failure
     rejectWarmup!(error);
   } finally {
     setWarmupPromise(null);
